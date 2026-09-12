@@ -5,11 +5,11 @@
 
 ## 1. Executive Status Dashboard
 
-- **Current Phase**: **Phase 6 — Parallel Agents (BullMQ)**
-- **Completed Phases**: Bootstrap, Phase 0 (Steps 1 & 2), Phase 1 (AI Provider Layer), Phase 2 (Agent Runtime), Phase 3 (PM Agent), Phase 4 (Basic Orchestrator), Phase 5 (Artifact System & Database Persistence).
-- **Active Task**: Ready for Phase 6: Parallel Agents (BullMQ Worker Queues & Redis Event Bus).
+- **Current Phase**: **Phase 7 — Code Execution Sandbox (Docker)**
+- **Completed Phases**: Bootstrap, Phase 0 (Steps 1 & 2), Phase 1 (AI Provider Layer), Phase 2 (Agent Runtime), Phase 3 (PM Agent), Phase 4 (Basic Orchestrator), Phase 5 (Artifact System & Database Persistence), Phase 6 (Parallel Agents & BullMQ Queues).
+- **Active Task**: Ready for Phase 7: Code Execution Sandbox (WorkspaceManager & Docker SandboxRunner).
 - **Blocked Tasks**: None.
-- **Next Major Milestone**: Phase 6 — Parallel Agents & Phase 7 — Code Execution Sandbox.
+- **Next Major Milestone**: Phase 7 — Code Execution Sandbox & Phase 8 — Review System.
 
 ---
 
@@ -24,8 +24,7 @@
 | **Phase 3** | PM Agent (First specialized agent) | **COMPLETED** | 2026-09-12 |
 | **Phase 4** | Orchestrator (DAG Task Graph, PM → Architect Handoff) | **COMPLETED** | 2026-09-12 |
 | **Phase 5** | Artifact System (PostgreSQL 16, Prisma ORM, Repositories) | **COMPLETED** | 2026-09-12 |
-| **Phase 6** | Parallel Agents (BullMQ worker queues) | PENDING | Pending |
-| **Phase 6** | Parallel Agents (BullMQ worker queues) | PENDING | Pending |
+| **Phase 6** | Parallel Agents (BullMQ worker queues & Redis Event Bus) | **COMPLETED** | 2026-09-12 |
 | **Phase 7** | Code Execution (Docker sandbox runner) | PENDING | Pending |
 | **Phase 8** | Review System (Reviewer, QA, Security gates) | PENDING | Pending |
 | **Phase 9** | Failure Recovery (Retry policy, loop detection) | PENDING | Pending |

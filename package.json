@@ -5,6 +5,7 @@
   "description": "ForgeOS — Multi-Agent Software Factory",
   "packageManager": "pnpm@12.4.1",
   "scripts": {
+    "postinstall": "pnpm --filter @forgeos/database run generate",
     "build": "turbo run build",
     "test": "turbo run test",
     "test:integration": "turbo run test:integration",

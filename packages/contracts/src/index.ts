@@ -256,3 +256,67 @@ export const ReviewReportContentSchema = z.object({
 });
 
 export type ReviewReportContent = z.infer<typeof ReviewReportContentSchema>;
+
+export const DatabaseSchemaContentSchema = z.object({
+  engine: z.literal("postgresql"),
+  prismaSchemaFragment: z.string().min(10),
+  entities: z.array(
+    z.object({
+      name: z.string(),
+      fields: z.array(z.string()),
+      indexes: z.array(z.string()).default([]),
+      relations: z.array(z.string()).default([]),
+    })
+  ),
+  migrationPlan: z.array(z.string()),
+  rollbackPlan: z.string(),
+});
+
+export type DatabaseSchemaContent = z.infer<typeof DatabaseSchemaContentSchema>;
+
+export const BackendImplementationContentSchema = z.object({
+  framework: z.literal("fastify"),
+  routes: z.array(
+    z.object({
+      path: z.string(),
+      method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
+      handlerDescription: z.string(),
+      requestSchema: z.string().optional(),
+      responseSchema: z.string(),
+    })
+  ),
+  services: z.array(
+    z.object({
+      name: z.string(),
+      methods: z.array(z.string()),
+    })
+  ),
+  unitTests: z.array(
+    z.object({
+      testName: z.string(),
+      scenario: z.string(),
+    })
+  ),
+});
+
+export type BackendImplementationContent = z.infer<typeof BackendImplementationContentSchema>;
+
+export const UISpecificationContentSchema = z.object({
+  framework: z.literal("nextjs"),
+  components: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string(),
+      props: z.array(z.string()),
+      state: z.array(z.string()),
+    })
+  ),
+  layout: z.object({
+    pages: z.array(z.string()),
+    navigation: z.array(z.string()),
+  }),
+  clientRoutes: z.array(z.string()),
+});
+
+export type UISpecificationContent = z.infer<typeof UISpecificationContentSchema>;
+
