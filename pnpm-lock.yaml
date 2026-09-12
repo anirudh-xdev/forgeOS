@@ -242,6 +242,34 @@ importers:
         specifier: ^5.8.2
         version: 5.9.3
 
+  packages/orchestrator:
+    dependencies:
+      '@forgeos/agent-runtime':
+        specifier: workspace:*
+        version: link:../agent-runtime
+      '@forgeos/ai-provider':
+        specifier: workspace:*
+        version: link:../ai-provider
+      '@forgeos/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@forgeos/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: ^3.24.2
+        version: 3.25.76
+    devDependencies:
+      rimraf:
+        specifier: ^6.0.1
+        version: 6.1.3
+      typescript:
+        specifier: ^5.8.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.7
+        version: 3.2.7(@types/node@22.20.2)
+
   packages/shared:
     devDependencies:
       rimraf:

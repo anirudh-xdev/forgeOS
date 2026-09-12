@@ -203,6 +203,43 @@ export const ProductSpecificationContentSchema = z.object({
 
 export type ProductSpecificationContent = z.infer<typeof ProductSpecificationContentSchema>;
 
+export const ArchitectureSpecificationContentSchema = z.object({
+  architecture: z.object({
+    pattern: z.string(),
+    components: z.array(
+      z.object({
+        name: z.string(),
+        role: z.string(),
+        technologies: z.array(z.string()),
+      })
+    ),
+  }),
+  database: z.object({
+    engine: z.string(),
+    entities: z.array(z.string()),
+    strategy: z.string(),
+  }),
+  apis: z.array(
+    z.object({
+      endpoint: z.string(),
+      method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]),
+      description: z.string(),
+      requestSchemaName: z.string().optional(),
+      responseSchemaName: z.string(),
+    })
+  ),
+  decisions: z.array(
+    z.object({
+      title: z.string(),
+      decision: z.string(),
+      alternatives: z.array(z.string()),
+      tradeoffs: z.string(),
+    })
+  ),
+});
+
+export type ArchitectureSpecificationContent = z.infer<typeof ArchitectureSpecificationContentSchema>;
+
 export const ReviewReportContentSchema = z.object({
   status: z.enum(["pass", "fail"]),
   severity: z.enum(["blocker", "critical", "high", "medium", "low", "info"]).optional(),
