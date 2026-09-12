@@ -21,6 +21,7 @@
     "@types/node": "^22.13.9",
     "prettier": "^3.5.3",
     "turbo": "^2.4.4",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.7"
   }
 }
