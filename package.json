@@ -1,0 +1,26 @@
+{
+  "name": "forgeos-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ForgeOS — Multi-Agent Software Factory",
+  "packageManager": "pnpm@12.4.1",
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "test:integration": "turbo run test:integration",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "format:check": "prettier --check \"**/*.{ts,tsx,json,md}\"",
+    "format:write": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "docker:up": "docker compose -f docker/docker-compose.yml up -d",
+    "docker:down": "docker compose -f docker/docker-compose.yml down",
+    "docker:logs": "docker compose -f docker/docker-compose.yml logs -f",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.9",
+    "prettier": "^3.5.3",
+    "turbo": "^2.4.4",
+    "typescript": "^5.8.2"
+  }
+}

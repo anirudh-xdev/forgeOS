@@ -6,10 +6,10 @@
 ## 1. Executive Status Dashboard
 
 - **Current Phase**: **Phase 0 — Repository Setup**
-- **Completed Phases**: None (AI Infrastructure Bootstrap completed)
-- **Active Task**: Bootstrap verification and handoff for Phase 0 execution.
+- **Completed Phases**: Bootstrap completed; Phase 0 Steps 1 & 2 completed.
+- **Active Task**: Phase 0 completion (Ready for Phase 1: AI Provider Layer).
 - **Blocked Tasks**: None.
-- **Next Major Milestone**: Phase 0 completion (Monorepo setup, Docker Compose for Postgres + Redis).
+- **Next Major Milestone**: Phase 1 — AI Provider Layer (`AIProvider`, `MockProvider`, `OllamaProvider`).
 
 ---
 
@@ -18,8 +18,8 @@
 | Phase | Description | Status | Completion Date |
 | :--- | :--- | :--- | :--- |
 | **Bootstrap** | AI Engineering Infrastructure (Rules, Skills, Docs) | **COMPLETED** | 2026-09-12 |
-| **Phase 0** | Repository Setup (Git, Monorepo, Docker Compose) | **READY TO START** | Pending |
-| **Phase 1** | AI Provider Layer (AIProvider, Mock, Ollama) | PENDING | Pending |
+| **Phase 0 (Step 1-2)**| Monorepo & Infra (pnpm, Turborepo, TS, Postgres, Redis) | **COMPLETED** | 2026-09-12 |
+| **Phase 1** | AI Provider Layer (AIProvider, Mock, Ollama) | **READY TO START** | Pending |
 | **Phase 2** | Agent Runtime (AgentDefinition, AgentRunner) | PENDING | Pending |
 | **Phase 3** | PM Agent (First specialized agent) | PENDING | Pending |
 | **Phase 4** | Orchestrator (Task graph, PM → Architect) | PENDING | Pending |

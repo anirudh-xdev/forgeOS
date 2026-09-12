@@ -1,0 +1,39 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build Outputs
+dist
+build
+.next
+out
+
+# Turborepo
+.turbo
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Testing & Coverage
+coverage
+.nyc_output
+
+# Temporary files & Agent Worktrees
+.worktrees
+tmp
+temp
+*.tsbuildinfo
+
+# OS Files
+.DS_Store
+Thumbs.db
