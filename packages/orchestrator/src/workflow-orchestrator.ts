@@ -23,10 +23,12 @@ import { ArtifactRepository, ProjectRepository } from "@forgeos/database";
 import { EventBus } from "@forgeos/event-bus";
 import { ForgeOSError } from "@forgeos/shared";
 import { TaskGraph } from "./task-graph.js";
+import { ApprovalGateEngine } from "./gates/approval-gate.js";
 
 export interface WorkflowOptions {
   projectId?: string;
   requirement: string;
+  enableGates?: boolean;
 }
 
 export interface WorkflowRepositories {
@@ -47,15 +49,18 @@ export class WorkflowOrchestrator {
   private runner: AgentRunner;
   private repositories?: WorkflowRepositories;
   private eventBus?: EventBus;
+  private gateEngine?: ApprovalGateEngine;
 
   constructor(
     runner: AgentRunner,
     repositories?: WorkflowRepositories,
-    eventBus?: EventBus
+    eventBus?: EventBus,
+    gateEngine?: ApprovalGateEngine
   ) {
     this.runner = runner;
     this.repositories = repositories;
     this.eventBus = eventBus;
+    this.gateEngine = gateEngine;
   }
 
   private resolveAgentDefinition(agentId: string) {
@@ -141,7 +146,7 @@ export class WorkflowOrchestrator {
       updatedAt: new Date().toISOString(),
     });
 
-    return this.executeGraph(projectId, graph, options.requirement);
+    return this.executeGraph(projectId, graph, options.requirement, options.enableGates);
   }
 
   /**
@@ -224,16 +229,18 @@ export class WorkflowOrchestrator {
       updatedAt: new Date().toISOString(),
     });
 
-    return this.executeGraph(projectId, graph, options.requirement);
+    return this.executeGraph(projectId, graph, options.requirement, options.enableGates);
   }
 
   private async executeGraph(
     projectId: string,
     graph: TaskGraph,
-    requirement: string
+    requirement: string,
+    enableGates?: boolean
   ): Promise<WorkflowResult> {
     const artifacts: Artifact[] = [];
     const events: DomainEvent[] = [];
+    const shouldRunGates = enableGates ?? (this.gateEngine !== undefined);
 
     // Initialize database persistence if repositories are configured
     if (this.repositories) {
@@ -362,30 +369,137 @@ export class WorkflowOrchestrator {
         })
       );
 
-      // Process parallel execution outcomes
+      // Process execution outcomes
       for (const { task, result, approvalEvent } of results) {
         if (result.success && result.artifact) {
-          result.artifact.status = "approved"; // Baseline auto-approval
-          artifacts.push(result.artifact);
+          let isApproved = true;
+          let failureReasons: string[] = [];
 
-          graph.updateTaskStatus(task.id, "COMPLETED");
-          if (this.repositories) {
-            await this.repositories.artifactRepo.saveArtifact(result.artifact);
-            await this.repositories.projectRepo.updateTaskStatus(task.id, "COMPLETED");
+          if (shouldRunGates) {
+            const gateEngine = this.gateEngine ?? new ApprovalGateEngine(this.runner);
+
+            result.artifact.status = "draft";
+            if (this.repositories) {
+              await this.repositories.artifactRepo.saveArtifact(result.artifact);
+            }
+
+            await recordEvent(
+              "REVIEW_REQUESTED",
+              {
+                artifactId: result.artifact.id,
+                artifactType: result.artifact.type,
+              },
+              task.id
+            );
+
+            const gateResult = await gateEngine.evaluateArtifact(result.artifact, {
+              projectId,
+              taskId: task.id,
+            });
+
+            // Save individual audit reports if generated
+            if (this.repositories) {
+              if (gateResult.reports.reviewReport) {
+                await this.repositories.artifactRepo.saveArtifact({
+                  id: randomUUID(),
+                  projectId,
+                  taskId: task.id,
+                  type: "ReviewReport",
+                  version: 1,
+                  createdBy: "forgeos-reviewer-agent",
+                  content: gateResult.reports.reviewReport,
+                  status: gateResult.reports.reviewReport.status === "pass" ? "approved" : "rejected",
+                });
+              }
+              if (gateResult.reports.testReport) {
+                await this.repositories.artifactRepo.saveArtifact({
+                  id: randomUUID(),
+                  projectId,
+                  taskId: task.id,
+                  type: "TestReport",
+                  version: 1,
+                  createdBy: "forgeos-qa-agent",
+                  content: gateResult.reports.testReport,
+                  status: gateResult.reports.testReport.passed ? "approved" : "rejected",
+                });
+              }
+              if (gateResult.reports.securityReport) {
+                await this.repositories.artifactRepo.saveArtifact({
+                  id: randomUUID(),
+                  projectId,
+                  taskId: task.id,
+                  type: "SecurityReport",
+                  version: 1,
+                  createdBy: "forgeos-security-agent",
+                  content: gateResult.reports.securityReport,
+                  status: gateResult.reports.securityReport.status === "secure" ? "approved" : "rejected",
+                });
+              }
+            }
+
+            if (gateResult.passed) {
+              result.artifact.status = "approved";
+            } else {
+              result.artifact.status = "rejected";
+              isApproved = false;
+              failureReasons = gateResult.reasons;
+            }
+          } else {
+            result.artifact.status = "approved"; // Baseline auto-approval
           }
 
-          await recordEvent(
-            "TASK_COMPLETED",
-            {
-              agentId: task.agentId,
-              artifactId: result.artifact.id,
-              artifactType: result.artifact.type,
-            },
-            task.id
-          );
+          if (isApproved) {
+            artifacts.push(result.artifact);
+            graph.updateTaskStatus(task.id, "COMPLETED");
+            if (this.repositories) {
+              await this.repositories.artifactRepo.saveArtifact(result.artifact);
+              await this.repositories.projectRepo.updateTaskStatus(task.id, "COMPLETED");
+            }
 
-          if (approvalEvent && approvalEvent !== "TASK_COMPLETED") {
-            await recordEvent(approvalEvent, { artifactId: result.artifact.id }, task.id);
+            await recordEvent(
+              "TASK_COMPLETED",
+              {
+                agentId: task.agentId,
+                artifactId: result.artifact.id,
+                artifactType: result.artifact.type,
+              },
+              task.id
+            );
+
+            if (approvalEvent && approvalEvent !== "TASK_COMPLETED") {
+              await recordEvent(approvalEvent, { artifactId: result.artifact.id }, task.id);
+            }
+          } else {
+            graph.updateTaskStatus(task.id, "FAILED");
+            if (this.repositories) {
+              await this.repositories.artifactRepo.saveArtifact(result.artifact);
+              await this.repositories.projectRepo.updateTaskStatus(task.id, "FAILED");
+            }
+
+            await recordEvent(
+              "REVIEW_FAILED",
+              {
+                agentId: task.agentId,
+                artifactId: result.artifact.id,
+                reasons: failureReasons,
+              },
+              task.id
+            );
+
+            await recordEvent(
+              "PROJECT_FAILED",
+              { failedTaskId: task.id, reasons: failureReasons },
+              task.id
+            );
+
+            return {
+              projectId,
+              status: "FAILED",
+              artifacts,
+              events,
+              tasks: graph.getAllTasks(),
+              error: `Gate evaluation failed: ${failureReasons.join("; ")}`,
+            };
           }
         } else {
           graph.updateTaskStatus(task.id, "FAILED");

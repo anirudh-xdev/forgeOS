@@ -5,11 +5,11 @@
 
 ## 1. Executive Status Dashboard
 
-- **Current Phase**: **Phase 8 — Review System & Evaluation Gates**
-- **Completed Phases**: Bootstrap, Phase 0 (Steps 1 & 2), Phase 1 (AI Provider Layer), Phase 2 (Agent Runtime), Phase 3 (PM Agent), Phase 4 (Basic Orchestrator), Phase 5 (Artifact System & Database Persistence), Phase 6 (Parallel Agents & BullMQ Queues), Phase 7 (Code Execution Sandbox).
-- **Active Task**: Ready for Phase 8: Review System (Reviewer Agent, QA Agent, Security Agent & Approval Gates).
+- **Current Phase**: **Phase 9 — Failure Recovery & Loop Detection**
+- **Completed Phases**: Bootstrap, Phase 0 (Steps 1 & 2), Phase 1 (AI Provider Layer), Phase 2 (Agent Runtime), Phase 3 (PM Agent), Phase 4 (Basic Orchestrator), Phase 5 (Artifact System & Database Persistence), Phase 6 (Parallel Agents & BullMQ Queues), Phase 7 (Code Execution Sandbox), Phase 8 (Review System & Evaluation Gates).
+- **Active Task**: Ready for Phase 9: Failure Recovery (Retry Policy, Loop Detection, Failure Classifier & Self-Healing Orchestration).
 - **Blocked Tasks**: None.
-- **Next Major Milestone**: Phase 8 — Review System & Phase 9 — Failure Recovery.
+- **Next Major Milestone**: Phase 9 — Failure Recovery & Phase 10 — Realtime UI.
 
 ---
 
@@ -26,7 +26,7 @@
 | **Phase 5** | Artifact System (PostgreSQL 16, Prisma ORM, Repositories) | **COMPLETED** | 2026-09-12 |
 | **Phase 6** | Parallel Agents (BullMQ worker queues & Redis Event Bus) | **COMPLETED** | 2026-09-12 |
 | **Phase 7** | Code Execution (Docker sandbox runner & WorkspaceManager) | **COMPLETED** | 2026-09-12 |
-| **Phase 8** | Review System (Reviewer, QA, Security gates) | PENDING | Pending |
+| **Phase 8** | Review System (Reviewer, QA, Security gates) | **COMPLETED** | 2026-09-12 |
 | **Phase 9** | Failure Recovery (Retry policy, loop detection) | PENDING | Pending |
 | **Phase 10** | Realtime UI (Next.js dashboard, Socket.IO) | PENDING | Pending |
 | **Phase 11** | Observability (OpenTelemetry, Prometheus, Grafana) | PENDING | Pending |

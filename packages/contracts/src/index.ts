@@ -348,3 +348,38 @@ export const TestReportContentSchema = z.object({
 
 export type TestReportContent = z.infer<typeof TestReportContentSchema>;
 
+export const SecurityFindingSchema = z.object({
+  id: z.string(),
+  severity: z.enum(["critical", "high", "medium", "low", "info"]),
+  category: z.string(),
+  file: z.string(),
+  line: z.number().optional(),
+  description: z.string(),
+  remediation: z.string(),
+});
+
+export type SecurityFinding = z.infer<typeof SecurityFindingSchema>;
+
+export const SecurityReportContentSchema = z.object({
+  status: z.enum(["secure", "vulnerable", "blocked"]),
+  findings: z.array(SecurityFindingSchema),
+  riskScore: z.number().min(0).max(100),
+  summary: z.string(),
+});
+
+export type SecurityReportContent = z.infer<typeof SecurityReportContentSchema>;
+
+export const GateEvaluationResultSchema = z.object({
+  passed: z.boolean(),
+  artifactType: ArtifactTypeSchema,
+  status: ArtifactStatusSchema,
+  reports: z.object({
+    reviewReport: ReviewReportContentSchema.optional(),
+    testReport: TestReportContentSchema.optional(),
+    securityReport: SecurityReportContentSchema.optional(),
+  }),
+  reasons: z.array(z.string()),
+});
+
+export type GateEvaluationResult = z.infer<typeof GateEvaluationResultSchema>;
+
