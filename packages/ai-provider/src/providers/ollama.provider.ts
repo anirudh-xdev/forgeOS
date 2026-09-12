@@ -4,6 +4,7 @@ import { AIProvider, GenerateRequest, GenerateResponse } from "../types.js";
 export interface OllamaProviderOptions {
   baseUrl?: string;
   defaultModel?: string;
+  model?: string;
   timeoutMs?: number;
 }
 
@@ -27,7 +28,7 @@ export class OllamaProvider implements AIProvider {
 
   constructor(options?: OllamaProviderOptions) {
     this.baseUrl = (options?.baseUrl ?? process.env["OLLAMA_BASE_URL"] ?? "http://localhost:11434").replace(/\/$/, "");
-    this.defaultModel = options?.defaultModel ?? process.env["DEFAULT_LOCAL_MODEL"] ?? "llama3.2:3b";
+    this.defaultModel = options?.defaultModel ?? options?.model ?? process.env["DEFAULT_LOCAL_MODEL"] ?? "llama3.2:3b";
     this.timeoutMs = options?.timeoutMs ?? 120000;
   }
 

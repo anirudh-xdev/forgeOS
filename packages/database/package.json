@@ -1,5 +1,5 @@
 {
-  "name": "@forgeos/orchestrator",
+  "name": "@forgeos/database",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,20 +12,19 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "typecheck": "tsc --noEmit",
+    "generate": "prisma generate",
     "test": "vitest run",
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@forgeos/agent-runtime": "workspace:*",
-    "@forgeos/ai-provider": "workspace:*",
     "@forgeos/contracts": "workspace:*",
-    "@forgeos/database": "workspace:*",
     "@forgeos/shared": "workspace:*",
-    "zod": "^3.24.2"
+    "@prisma/client": "^6.4.1"
   },
   "devDependencies": {
+    "prisma": "^6.4.1",
     "rimraf": "^6.0.1",
     "typescript": "^5.8.2",
     "vitest": "^3.0.7"

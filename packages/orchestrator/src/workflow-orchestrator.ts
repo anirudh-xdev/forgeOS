@@ -8,15 +8,22 @@ import {
   AgentTask,
   Artifact,
   DomainEvent,
+  DomainEventType,
   ProductSpecificationContentSchema,
   ArchitectureSpecificationContentSchema,
 } from "@forgeos/contracts";
+import { ArtifactRepository, ProjectRepository } from "@forgeos/database";
 import { ForgeOSError } from "@forgeos/shared";
 import { TaskGraph } from "./task-graph.js";
 
 export interface WorkflowOptions {
   projectId?: string;
   requirement: string;
+}
+
+export interface WorkflowRepositories {
+  artifactRepo: ArtifactRepository;
+  projectRepo: ProjectRepository;
 }
 
 export interface WorkflowResult {
@@ -30,9 +37,11 @@ export interface WorkflowResult {
 
 export class WorkflowOrchestrator {
   private runner: AgentRunner;
+  private repositories?: WorkflowRepositories;
 
-  constructor(runner: AgentRunner) {
+  constructor(runner: AgentRunner, repositories?: WorkflowRepositories) {
     this.runner = runner;
+    this.repositories = repositories;
   }
 
   public async runRequirementToArchitectureWorkflow(
@@ -43,14 +52,45 @@ export class WorkflowOrchestrator {
     const artifacts: Artifact[] = [];
     const events: DomainEvent[] = [];
 
+    // Initialize database persistence if repositories are configured
+    if (this.repositories) {
+      const user = await this.repositories.projectRepo.findOrCreateDefaultUser();
+      await this.repositories.projectRepo.createProject({
+        id: projectId,
+        userId: user.id,
+        name: `Project ${projectId.slice(0, 8)}`,
+        requirement: options.requirement,
+        status: "ACTIVE",
+      });
+    }
+
+    // Helper to push and optionally persist events
+    const recordEvent = async (type: DomainEventType, payload: Record<string, unknown>, taskId?: string) => {
+      const event: DomainEvent = {
+        id: randomUUID(),
+        type,
+        projectId,
+        taskId,
+        timestamp: new Date().toISOString(),
+        payload,
+      };
+      events.push(event);
+
+      if (this.repositories) {
+        await this.repositories.projectRepo.saveDomainEvent({
+          id: event.id,
+          projectId: event.projectId,
+          type: event.type,
+          taskId: event.taskId,
+          timestamp: event.timestamp,
+          payload: event.payload as Record<string, unknown>,
+        });
+      }
+      return event;
+    };
+
     // Emit PROJECT_CREATED
-    events.push({
-      id: randomUUID(),
-      type: "PROJECT_CREATED",
-      projectId,
-      timestamp: new Date().toISOString(),
-      payload: { requirement: options.requirement },
-    });
+    await recordEvent("PROJECT_CREATED", { requirement: options.requirement });
 
     // Node 1: PM Agent
     const pmTaskId = randomUUID();
@@ -66,6 +106,16 @@ export class WorkflowOrchestrator {
       updatedAt: new Date().toISOString(),
     };
     graph.addTask(pmTask);
+
+    if (this.repositories) {
+      await this.repositories.projectRepo.saveAgentTask({
+        id: pmTask.id,
+        projectId,
+        agentId: pmTask.agentId,
+        input: pmTask.input as Record<string, unknown>,
+        status: pmTask.status,
+      });
+    }
 
     // Node 2: Architect Agent (depends on PM Agent)
     const archTaskId = randomUUID();
@@ -84,6 +134,16 @@ export class WorkflowOrchestrator {
     };
     graph.addTask(archTask);
 
+    if (this.repositories) {
+      await this.repositories.projectRepo.saveAgentTask({
+        id: archTask.id,
+        projectId,
+        agentId: archTask.agentId,
+        input: archTask.input as Record<string, unknown>,
+        status: archTask.status,
+      });
+    }
+
     // Execution Loop: evaluate DAG until all nodes complete
     while (!graph.isComplete()) {
       const readyTasks = graph.getReadyTasks();
@@ -97,14 +157,11 @@ export class WorkflowOrchestrator {
 
       for (const task of readyTasks) {
         graph.updateTaskStatus(task.id, "RUNNING");
-        events.push({
-          id: randomUUID(),
-          type: "TASK_STARTED",
-          projectId,
-          taskId: task.id,
-          timestamp: new Date().toISOString(),
-          payload: { agentId: task.agentId },
-        });
+        if (this.repositories) {
+          await this.repositories.projectRepo.updateTaskStatus(task.id, "RUNNING");
+        }
+
+        await recordEvent("TASK_STARTED", { agentId: task.agentId }, task.id);
 
         // Resolve agent definition and target schema
         let definition;
@@ -138,67 +195,71 @@ export class WorkflowOrchestrator {
           artifactType
         );
 
+        // Record agent run in database
+        if (this.repositories && result.runRecord) {
+          await this.repositories.projectRepo.saveAgentRun({
+            id: result.runRecord.id,
+            taskId: task.id,
+            provider: result.runRecord.provider,
+            model: result.runRecord.model,
+            startedAt: new Date(result.runRecord.startedAt),
+            completedAt: result.runRecord.completedAt ? new Date(result.runRecord.completedAt) : undefined,
+            inputTokens: result.runRecord.inputTokens,
+            outputTokens: result.runRecord.outputTokens,
+            latencyMs: result.runRecord.latencyMs,
+            status: result.runRecord.status,
+            error: result.runRecord.error,
+            rawOutput: result.runRecord.rawOutput,
+          });
+        }
+
         if (result.success && result.artifact) {
-          result.artifact.status = "approved"; // Automatically approved in Phase 4 baseline
+          result.artifact.status = "approved"; // Automatically approved in baseline workflow
           artifacts.push(result.artifact);
 
           graph.updateTaskStatus(task.id, "COMPLETED");
+          if (this.repositories) {
+            await this.repositories.artifactRepo.saveArtifact(result.artifact);
+            await this.repositories.projectRepo.updateTaskStatus(task.id, "COMPLETED");
+          }
 
-          events.push({
-            id: randomUUID(),
-            type: "TASK_COMPLETED",
-            projectId,
-            taskId: task.id,
-            timestamp: new Date().toISOString(),
-            payload: {
+          await recordEvent(
+            "TASK_COMPLETED",
+            {
               agentId: task.agentId,
               artifactId: result.artifact.id,
               artifactType: result.artifact.type,
             },
-          });
+            task.id
+          );
 
           // Specific deliverable events
           if (result.artifact.type === "ProductSpecification") {
-            events.push({
-              id: randomUUID(),
-              type: "SPEC_APPROVED",
-              projectId,
-              taskId: task.id,
-              timestamp: new Date().toISOString(),
-              payload: { artifactId: result.artifact.id },
-            });
+            await recordEvent("SPEC_APPROVED", { artifactId: result.artifact.id }, task.id);
           } else if (result.artifact.type === "ArchitectureSpecification") {
-            events.push({
-              id: randomUUID(),
-              type: "ARCHITECTURE_APPROVED",
-              projectId,
-              taskId: task.id,
-              timestamp: new Date().toISOString(),
-              payload: { artifactId: result.artifact.id },
-            });
+            await recordEvent("ARCHITECTURE_APPROVED", { artifactId: result.artifact.id }, task.id);
           }
         } else {
           graph.updateTaskStatus(task.id, "FAILED");
-          events.push({
-            id: randomUUID(),
-            type: "TASK_FAILED",
-            projectId,
-            taskId: task.id,
-            timestamp: new Date().toISOString(),
-            payload: {
+          if (this.repositories) {
+            await this.repositories.projectRepo.updateTaskStatus(task.id, "FAILED");
+          }
+
+          await recordEvent(
+            "TASK_FAILED",
+            {
               agentId: task.agentId,
               error: result.error,
               validationIssues: result.validationIssues,
             },
-          });
+            task.id
+          );
 
-          events.push({
-            id: randomUUID(),
-            type: "PROJECT_FAILED",
-            projectId,
-            timestamp: new Date().toISOString(),
-            payload: { failedTaskId: task.id, error: result.error },
-          });
+          await recordEvent(
+            "PROJECT_FAILED",
+            { failedTaskId: task.id, error: result.error },
+            task.id
+          );
 
           return {
             projectId,
@@ -212,13 +273,7 @@ export class WorkflowOrchestrator {
       }
     }
 
-    events.push({
-      id: randomUUID(),
-      type: "PROJECT_COMPLETED",
-      projectId,
-      timestamp: new Date().toISOString(),
-      payload: { artifactCount: artifacts.length },
-    });
+    await recordEvent("PROJECT_COMPLETED", { artifactCount: artifacts.length });
 
     return {
       projectId,

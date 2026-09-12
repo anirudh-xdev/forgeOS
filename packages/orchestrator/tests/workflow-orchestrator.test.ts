@@ -113,4 +113,74 @@ describe("WorkflowOrchestrator (PM → Architect Automated Handoff)", () => {
     expect(eventTypes).toContain("ARCHITECTURE_APPROVED");
     expect(eventTypes).toContain("PROJECT_COMPLETED");
   });
+
+  it("should persist project, tasks, runs, artifacts, and events to PostgreSQL", async () => {
+    const { getPrismaClient, disconnectPrisma, ArtifactRepository, ProjectRepository } =
+      await import("@forgeos/database");
+
+    const prisma = getPrismaClient();
+    const artifactRepo = new ArtifactRepository(prisma);
+    const projectRepo = new ProjectRepository(prisma);
+
+    const mockProvider = new MockProvider([
+      JSON.stringify(samplePMSpec),
+      JSON.stringify(sampleArchSpec),
+    ]);
+
+    const runner = new AgentRunner({ aiProvider: mockProvider });
+    const orchestrator = new WorkflowOrchestrator(runner, {
+      artifactRepo,
+      projectRepo,
+    });
+
+    const testProjectId = `proj-persisted-${Date.now()}`;
+
+    try {
+      const result = await orchestrator.runRequirementToArchitectureWorkflow({
+        projectId: testProjectId,
+        requirement: "Build a persistent auth service with JWT.",
+      });
+
+      expect(result.status).toBe("COMPLETED");
+
+      // Verify PostgreSQL Persistence: Project
+      const project = await projectRepo.getProject(testProjectId);
+      expect(project).not.toBeNull();
+      expect(project?.id).toBe(testProjectId);
+      expect(project?.budget).toBeDefined();
+
+      // Verify Tasks in Database
+      expect(project?.tasks).toHaveLength(2);
+      expect(project?.tasks.every((t) => t.status === "COMPLETED")).toBe(true);
+
+      // Verify Agent Runs in Database
+      const runs = project?.tasks.flatMap((t) => t.runs) ?? [];
+      expect(runs).toHaveLength(2);
+      expect(runs.every((r) => r.status === "success")).toBe(true);
+
+      // Verify Artifacts in Database
+      const persistedArtifacts = await artifactRepo.listProjectArtifacts(testProjectId);
+      expect(persistedArtifacts).toHaveLength(2);
+      expect(persistedArtifacts.some((a) => a.type === "ProductSpecification")).toBe(true);
+      expect(persistedArtifacts.some((a) => a.type === "ArchitectureSpecification")).toBe(true);
+
+      // Verify Domain Events in Database
+      const persistedEvents = await projectRepo.listDomainEvents(testProjectId);
+      expect(persistedEvents.length).toBeGreaterThanOrEqual(6);
+      const dbEventTypes = persistedEvents.map((e) => e.type);
+      expect(dbEventTypes).toContain("PROJECT_CREATED");
+      expect(dbEventTypes).toContain("SPEC_APPROVED");
+      expect(dbEventTypes).toContain("ARCHITECTURE_APPROVED");
+      expect(dbEventTypes).toContain("PROJECT_COMPLETED");
+    } finally {
+      // Clean up test project
+      try {
+        await prisma.project.deleteMany({ where: { id: testProjectId } });
+      } catch {
+        // ignore
+      }
+      await disconnectPrisma();
+    }
+  });
 });
+
