@@ -5,11 +5,11 @@
 
 ## 1. Executive Status Dashboard
 
-- **Current Phase**: **Phase 3 — First Agent (PM Agent)**
-- **Completed Phases**: Bootstrap, Phase 0 (Steps 1 & 2), Phase 1 (AI Provider Layer), Phase 2 (Agent Runtime).
-- **Active Task**: Ready for Phase 3: First Specialized Agent (PM Agent).
+- **Current Phase**: **Phase 4 — Basic Orchestrator**
+- **Completed Phases**: Bootstrap, Phase 0 (Steps 1 & 2), Phase 1 (AI Provider Layer), Phase 2 (Agent Runtime), Phase 3 (PM Agent).
+- **Active Task**: Ready for Phase 4: Basic Orchestrator (DAG Task Graph, Scheduler, PM → Architect workflow).
 - **Blocked Tasks**: None.
-- **Next Major Milestone**: Phase 3 — Product Manager Agent & Phase 4 — Basic Orchestrator.
+- **Next Major Milestone**: Phase 4 — Basic Orchestrator & Phase 5 — Artifact System.
 
 ---
 
@@ -21,8 +21,8 @@
 | **Phase 0 (Step 1-2)**| Monorepo & Infra (pnpm, Turborepo, TS, Postgres, Redis) | **COMPLETED** | 2026-09-12 |
 | **Phase 1** | AI Provider Layer (AIProvider, Mock, Ollama) | **COMPLETED** | 2026-09-12 |
 | **Phase 2** | Agent Runtime (AgentDefinition, AgentRunner, Tools) | **COMPLETED** | 2026-09-12 |
-| **Phase 3** | PM Agent (First specialized agent) | **READY TO START** | Pending |
-| **Phase 4** | Orchestrator (Task graph, PM → Architect) | PENDING | Pending |
+| **Phase 3** | PM Agent (First specialized agent) | **COMPLETED** | 2026-09-12 |
+| **Phase 4** | Orchestrator (Task graph, PM → Architect) | **READY TO START** | Pending |
 | **Phase 5** | Artifact System (Persistence, versioning, status) | PENDING | Pending |
 | **Phase 6** | Parallel Agents (BullMQ worker queues) | PENDING | Pending |
 | **Phase 7** | Code Execution (Docker sandbox runner) | PENDING | Pending |
