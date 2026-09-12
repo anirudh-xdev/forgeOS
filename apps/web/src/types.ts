@@ -63,4 +63,12 @@ export interface ProjectDetail {
   events: DomainEvent[];
 }
 
-export type { TaskNode, TaskEdge, TaskGraphSnapshot, DomainEvent };
+export type {
+  TaskNode,
+  TaskEdge,
+  TaskGraphSnapshot,
+  DomainEvent,
+  ProjectMetrics,
+  TraceSpanRecord,
+  AgentMetricSummary,
+} from "@forgeos/contracts";

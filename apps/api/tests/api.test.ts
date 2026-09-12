@@ -132,4 +132,67 @@ describe("Fastify API Server & Socket.IO Gateway (Phase 10)", () => {
     expect(receivedEvent.projectId).toBe(projectId);
     expect((receivedEvent.payload as any).agentId).toBe("forgeos-pm-agent");
   });
+
+  it("should export Prometheus metrics at GET /metrics", async () => {
+    const response = await serverInstance.app.inject({
+      method: "GET",
+      url: "/metrics",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toContain("text/plain");
+    expect(response.body).toContain("forgeos_agent_runs_total");
+    expect(response.body).toContain("forgeos_tokens_total");
+  });
+
+  it("should return telemetry metrics and budget status at GET /api/projects/:id/metrics", async () => {
+    // Create a project first
+    const projectId = randomUUID();
+    await serverInstance.app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: {
+        projectId,
+        requirement: "Telemetry validation project",
+        workflowType: "requirement_to_architecture",
+      },
+    });
+
+    const response = await serverInstance.app.inject({
+      method: "GET",
+      url: `/api/projects/${projectId}/metrics`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    const metrics = JSON.parse(response.body);
+    expect(metrics.projectId).toBe(projectId);
+    expect(metrics.budget).toBeDefined();
+    expect(metrics.budget.maxTokens).toBe(500000);
+    expect(metrics.budget.tokenUtilization).toBeDefined();
+    expect(metrics.budget.costUtilization).toBeDefined();
+    expect(Array.isArray(metrics.agentBreakdown)).toBe(true);
+  });
+
+  it("should return trace spans at GET /api/projects/:id/traces", async () => {
+    const projectId = randomUUID();
+    await serverInstance.app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: {
+        projectId,
+        requirement: "Trace verification project",
+        workflowType: "requirement_to_architecture",
+      },
+    });
+
+    const response = await serverInstance.app.inject({
+      method: "GET",
+      url: `/api/projects/${projectId}/traces`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.projectId).toBe(projectId);
+    expect(Array.isArray(body.spans)).toBe(true);
+  });
 });

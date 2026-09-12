@@ -25,6 +25,12 @@ import { ForgeOSError } from "@forgeos/shared";
 import { TaskGraph } from "./task-graph.js";
 import { ApprovalGateEngine } from "./gates/approval-gate.js";
 import { RecoveryStrategy, FailureContext } from "@forgeos/recovery";
+import { BudgetManager } from "./budget/budget-manager.js";
+import {
+  defaultTracer,
+  defaultMetricsRegistry,
+  defaultCostEstimator,
+} from "@forgeos/logger";
 
 export interface WorkflowOptions {
   projectId?: string;
@@ -353,6 +359,36 @@ export class WorkflowOrchestrator {
         );
       }
 
+      // Pre-Execution Budget Verification (Specification Section 19)
+      if (this.repositories) {
+        const budgetManager = new BudgetManager(this.repositories.projectRepo);
+        const budgetCheck = await budgetManager.checkBudget(projectId);
+        if (!budgetCheck.allowed) {
+          await recordEvent("BUDGET_EXCEEDED", {
+            reason: budgetCheck.reason,
+            budget: budgetCheck.budget,
+          });
+
+          for (const task of readyTasks) {
+            graph.updateTaskStatus(task.id, "FAILED");
+            await this.repositories.projectRepo.updateTaskStatus(task.id, "FAILED");
+          }
+
+          await recordEvent("PROJECT_FAILED", {
+            error: budgetCheck.reason,
+          });
+
+          return {
+            projectId,
+            status: "FAILED",
+            artifacts,
+            events,
+            tasks: graph.getAllTasks(),
+            error: budgetCheck.reason,
+          };
+        }
+      }
+
       // Mark all ready tasks as RUNNING simultaneously
       for (const task of readyTasks) {
         graph.updateTaskStatus(task.id, "RUNNING");
@@ -362,7 +398,7 @@ export class WorkflowOrchestrator {
         await recordEvent("TASK_STARTED", { agentId: task.agentId }, task.id);
       }
 
-      // Execute ready tasks CONCURRENTLY in PARALLEL
+      // Execute ready tasks CONCURRENTLY in PARALLEL with OpenTelemetry tracing & telemetry
       const results = await Promise.all(
         readyTasks.map(async (task) => {
           const { definition, targetSchema, artifactType, approvalEvent } =
@@ -374,30 +410,92 @@ export class WorkflowOrchestrator {
             upstreamArtifacts: [...artifacts],
           };
 
-          const result = await this.runner.execute(
-            definition,
-            task,
-            context,
-            targetSchema,
-            artifactType
+          const result = await defaultTracer.withSpan(
+            `agent.${definition.role}.execute`,
+            {
+              projectId,
+              taskId: task.id,
+              agentId: definition.id,
+              attributes: {
+                "agent.role": definition.role,
+                "agent.id": definition.id,
+                "task.attempt": (task.retryCount ?? 0) + 1,
+              },
+            },
+            async (span) => {
+              const execResult = await this.runner.execute(
+                definition,
+                task,
+                context,
+                targetSchema,
+                artifactType
+              );
+
+              if (execResult.runRecord) {
+                span.setAttribute("llm.provider", execResult.runRecord.provider);
+                span.setAttribute("llm.model", execResult.runRecord.model);
+                span.setAttribute(
+                  "llm.usage.prompt_tokens",
+                  execResult.runRecord.inputTokens ?? 0
+                );
+                span.setAttribute(
+                  "llm.usage.completion_tokens",
+                  execResult.runRecord.outputTokens ?? 0
+                );
+                span.setAttribute(
+                  "llm.usage.total_tokens",
+                  (execResult.runRecord.inputTokens ?? 0) +
+                    (execResult.runRecord.outputTokens ?? 0)
+                );
+              }
+
+              return execResult;
+            }
           );
 
-          if (this.repositories && result.runRecord) {
-            await this.repositories.projectRepo.saveAgentRun({
-              id: result.runRecord.id,
-              taskId: task.id,
+          if (result.runRecord) {
+            const inputTokens = result.runRecord.inputTokens ?? 0;
+            const outputTokens = result.runRecord.outputTokens ?? 0;
+            const model = result.runRecord.model;
+            const costUSD = defaultCostEstimator.estimateCostUSD(
+              model,
+              inputTokens,
+              outputTokens
+            );
+
+            if (this.repositories) {
+              await this.repositories.projectRepo.saveAgentRun({
+                id: result.runRecord.id,
+                taskId: task.id,
+                provider: result.runRecord.provider,
+                model: result.runRecord.model,
+                startedAt: new Date(result.runRecord.startedAt),
+                completedAt: result.runRecord.completedAt
+                  ? new Date(result.runRecord.completedAt)
+                  : undefined,
+                inputTokens,
+                outputTokens,
+                latencyMs: result.runRecord.latencyMs,
+                status: result.runRecord.status,
+                error: result.runRecord.error,
+                rawOutput: result.runRecord.rawOutput,
+              });
+
+              // Increment budget usage
+              const budgetManager = new BudgetManager(this.repositories.projectRepo);
+              await budgetManager.recordUsage(projectId, model, inputTokens, outputTokens);
+            }
+
+            // Prometheus metrics recording
+            defaultMetricsRegistry.recordAgentRun({
+              agent: definition.id,
               provider: result.runRecord.provider,
               model: result.runRecord.model,
-              startedAt: new Date(result.runRecord.startedAt),
-              completedAt: result.runRecord.completedAt
-                ? new Date(result.runRecord.completedAt)
-                : undefined,
-              inputTokens: result.runRecord.inputTokens,
-              outputTokens: result.runRecord.outputTokens,
-              latencyMs: result.runRecord.latencyMs,
-              status: result.runRecord.status,
-              error: result.runRecord.error,
-              rawOutput: result.runRecord.rawOutput,
+              status: result.success ? "success" : "failed",
+              durationMs: result.runRecord.latencyMs ?? 0,
+              inputTokens,
+              outputTokens,
+              costUSD,
             });
           }
 
@@ -535,6 +633,7 @@ export class WorkflowOrchestrator {
               );
 
               if (plan.loopCheck.isLoop) {
+                defaultMetricsRegistry.recordCircuitBreakerTrip(task.agentId, plan.loopCheck.loopType);
                 graph.updateTaskStatus(task.id, "FAILED");
                 if (this.repositories) {
                   await this.repositories.artifactRepo.saveArtifact(result.artifact);
@@ -673,6 +772,7 @@ export class WorkflowOrchestrator {
             );
 
             if (plan.loopCheck.isLoop) {
+              defaultMetricsRegistry.recordCircuitBreakerTrip(task.agentId, plan.loopCheck.loopType);
               graph.updateTaskStatus(task.id, "FAILED");
               if (this.repositories) {
                 await this.repositories.projectRepo.updateTaskStatus(task.id, "FAILED");

@@ -92,6 +92,16 @@ export class ProjectRepository {
   }
 
   public async createProject(data: CreateProjectInput) {
+    if (data.id) {
+      const existing = await this.prisma.project.findUnique({
+        where: { id: data.id },
+        include: { budget: true },
+      });
+      if (existing) {
+        return existing;
+      }
+    }
+
     return this.prisma.project.create({
       data: {
         id: data.id,
@@ -216,6 +226,71 @@ export class ProjectRepository {
     return this.prisma.domainEventRecord.findMany({
       where: { projectId },
       orderBy: { timestamp: "asc" },
+    });
+  }
+
+  public async getProjectBudget(projectId: string) {
+    return this.prisma.projectBudget.findUnique({
+      where: { projectId },
+    });
+  }
+
+  public async updateProjectBudget(
+    projectId: string,
+    data: {
+      maxTokens?: number;
+      maxCost?: number;
+      maxRuntimeMinutes?: number;
+      maxRetries?: number;
+      maxConcurrentAgents?: number;
+    }
+  ) {
+    return this.prisma.projectBudget.update({
+      where: { projectId },
+      data: {
+        maxTokens: data.maxTokens,
+        maxCost: data.maxCost !== undefined ? data.maxCost : undefined,
+        maxRuntimeMinutes: data.maxRuntimeMinutes,
+        maxRetries: data.maxRetries,
+        maxConcurrentAgents: data.maxConcurrentAgents,
+      },
+    });
+  }
+
+  public async incrementBudgetUsage(projectId: string, tokens: number, costUSD: number) {
+    const current = await this.prisma.projectBudget.findUnique({
+      where: { projectId },
+    });
+
+    if (!current) {
+      return null;
+    }
+
+    const currentCost = Number(current.usedCost);
+    const newCost = Number((currentCost + costUSD).toFixed(4));
+
+    return this.prisma.projectBudget.update({
+      where: { projectId },
+      data: {
+        usedTokens: { increment: tokens },
+        usedCost: newCost,
+      },
+    });
+  }
+
+  public async getAgentRunsByProject(projectId: string) {
+    return this.prisma.agentRun.findMany({
+      where: {
+        task: {
+          projectId,
+        },
+      },
+      include: {
+        task: true,
+      },
+      orderBy: {
+        startedAt: "asc",
+      },
     });
   }
 }

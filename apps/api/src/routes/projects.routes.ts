@@ -12,6 +12,7 @@ import { WorkflowOrchestrator } from "@forgeos/orchestrator";
 import { ProjectRepository, ArtifactRepository } from "@forgeos/database";
 import { SocketGateway } from "../socket.js";
 import { EventBus } from "@forgeos/event-bus";
+import { defaultCostEstimator, defaultTracer } from "@forgeos/logger";
 
 export interface ProjectsRoutesOptions {
   orchestrator: WorkflowOrchestrator;
@@ -39,6 +40,16 @@ export const projectsRoutes: FastifyPluginAsync<ProjectsRoutesOptions> = async (
 
     const data = parseResult.data;
     const projectId = data.projectId ?? randomUUID();
+
+    // Synchronously ensure project and budget exist in database
+    const user = await projectRepo.findOrCreateDefaultUser();
+    await projectRepo.createProject({
+      id: projectId,
+      userId: user.id,
+      name: `Project ${projectId.slice(0, 8)}`,
+      requirement: data.requirement,
+      status: "ACTIVE",
+    });
 
     // Launch orchestrator workflow in background
     (async () => {
@@ -230,4 +241,165 @@ export const projectsRoutes: FastifyPluginAsync<ProjectsRoutesOptions> = async (
       });
     }
   );
+
+  // 7. GET /api/projects/:id/metrics - Project Telemetry & Cost Aggregates (Phase 11)
+  fastify.get<{ Params: { id: string } }>("/projects/:id/metrics", async (request, reply) => {
+    const { id } = request.params;
+    const project = await projectRepo.getProject(id);
+    if (!project) {
+      return reply.status(404).send({ error: `Project '${id}' not found.` });
+    }
+
+    const runs = await projectRepo.getAgentRunsByProject(id);
+    const budget = await projectRepo.getProjectBudget(id);
+
+    const totalRuns = runs.length;
+    const successfulRuns = runs.filter((r) => r.status === "success").length;
+    const failedRuns = runs.filter((r) => r.status === "failed").length;
+    const successRate = totalRuns > 0 ? Number(((successfulRuns / totalRuns) * 100).toFixed(1)) : 100;
+
+    let totalLatencyMs = 0;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let totalCostUSD = 0;
+
+    const agentMap = new Map<string, {
+      role: string;
+      runs: number;
+      successfulRuns: number;
+      failedRuns: number;
+      totalLatencyMs: number;
+      inputTokens: number;
+      outputTokens: number;
+      costUSD: number;
+    }>();
+
+    for (const run of runs) {
+      const latency = run.latencyMs ?? 0;
+      const inTok = run.inputTokens ?? 0;
+      const outTok = run.outputTokens ?? 0;
+      const cost = defaultCostEstimator.estimateCostUSD(run.model, inTok, outTok);
+
+      totalLatencyMs += latency;
+      totalInputTokens += inTok;
+      totalOutputTokens += outTok;
+      totalCostUSD += cost;
+
+      const agentId = run.task?.agentId ?? "unknown";
+      if (!agentMap.has(agentId)) {
+        agentMap.set(agentId, {
+          role: agentId,
+          runs: 0,
+          successfulRuns: 0,
+          failedRuns: 0,
+          totalLatencyMs: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          costUSD: 0,
+        });
+      }
+
+      const stat = agentMap.get(agentId)!;
+      stat.runs++;
+      if (run.status === "success") stat.successfulRuns++;
+      if (run.status === "failed") stat.failedRuns++;
+      stat.totalLatencyMs += latency;
+      stat.inputTokens += inTok;
+      stat.outputTokens += outTok;
+      stat.costUSD = Number((stat.costUSD + cost).toFixed(6));
+    }
+
+    const avgLatencyMs = totalRuns > 0 ? Math.round(totalLatencyMs / totalRuns) : 0;
+    const totalTokens = totalInputTokens + totalOutputTokens;
+
+    const maxTokens = budget?.maxTokens ?? 500000;
+    const usedTokens = budget?.usedTokens ?? totalTokens;
+    const maxCostUSD = Number(budget?.maxCost ?? 10.0);
+    const usedCostUSD = Number(budget?.usedCost ?? totalCostUSD);
+
+    const tokenUtilization = maxTokens > 0 ? Number(((usedTokens / maxTokens) * 100).toFixed(1)) : 0;
+    const costUtilization = maxCostUSD > 0 ? Number(((usedCostUSD / maxCostUSD) * 100).toFixed(1)) : 0;
+
+    const agentBreakdown = Array.from(agentMap.entries()).map(([agentId, data]) => ({
+      agentId,
+      role: data.role,
+      runs: data.runs,
+      successfulRuns: data.successfulRuns,
+      failedRuns: data.failedRuns,
+      avgLatencyMs: data.runs > 0 ? Math.round(data.totalLatencyMs / data.runs) : 0,
+      totalInputTokens: data.inputTokens,
+      totalOutputTokens: data.outputTokens,
+      totalTokens: data.inputTokens + data.outputTokens,
+      costUSD: data.costUSD,
+    }));
+
+    return reply.send({
+      projectId: id,
+      totalRuns,
+      successfulRuns,
+      failedRuns,
+      successRate,
+      totalLatencyMs,
+      avgLatencyMs,
+      totalInputTokens,
+      totalOutputTokens,
+      totalTokens,
+      totalCostUSD: Number(totalCostUSD.toFixed(6)),
+      budget: {
+        maxTokens,
+        usedTokens,
+        remainingTokens: Math.max(0, maxTokens - usedTokens),
+        tokenUtilization,
+        maxCostUSD,
+        usedCostUSD,
+        remainingCostUSD: Number(Math.max(0, maxCostUSD - usedCostUSD).toFixed(4)),
+        costUtilization,
+        maxRuntimeMinutes: budget?.maxRuntimeMinutes ?? 60,
+        isExceeded: usedTokens >= maxTokens || usedCostUSD >= maxCostUSD,
+      },
+      agentBreakdown,
+    });
+  });
+
+  // 8. GET /api/projects/:id/traces - Execution Timeline & Trace Spans (Phase 11)
+  fastify.get<{ Params: { id: string } }>("/projects/:id/traces", async (request, reply) => {
+    const { id } = request.params;
+    const liveSpans = defaultTracer.getSpans(id);
+
+    if (liveSpans.length > 0) {
+      return reply.send({
+        projectId: id,
+        spans: liveSpans,
+      });
+    }
+
+    const runs = await projectRepo.getAgentRunsByProject(id);
+    const synthesizedSpans = runs.map((r) => ({
+      id: r.id,
+      traceId: `trace-${id.slice(0, 8)}`,
+      spanId: `span-${r.id.slice(0, 8)}`,
+      name: `agent.${r.task?.agentId ?? "agent"}.execute`,
+      startTime: r.startedAt.toISOString(),
+      endTime: r.completedAt ? r.completedAt.toISOString() : undefined,
+      durationMs: r.latencyMs ?? 0,
+      attributes: {
+        "forgeos.project_id": id,
+        "forgeos.task_id": r.taskId,
+        "forgeos.agent_id": r.task?.agentId,
+        "llm.provider": r.provider,
+        "llm.model": r.model,
+        "llm.usage.prompt_tokens": r.inputTokens ?? 0,
+        "llm.usage.completion_tokens": r.outputTokens ?? 0,
+      },
+      status: {
+        code: r.status === "failed" ? "ERROR" : "OK",
+        message: r.error ?? undefined,
+      },
+    }));
+
+    return reply.send({
+      projectId: id,
+      spans: synthesizedSpans,
+    });
+  });
 };

@@ -4,6 +4,7 @@ import { DAGVisualizer } from "./components/DAGVisualizer.js";
 import { EventTerminal } from "./components/EventTerminal.js";
 import { ArtifactExplorer } from "./components/ArtifactExplorer.js";
 import { FailureExplorer } from "./components/FailureExplorer.js";
+import { MetricsDashboard } from "./components/MetricsDashboard.js";
 import { HumanApprovalModal } from "./components/HumanApprovalModal.js";
 import { NewProjectModal } from "./components/NewProjectModal.js";
 import { socketService } from "./services/socket.js";
@@ -15,7 +16,7 @@ import {
   submitGateDecision,
 } from "./services/api.js";
 import { ProjectSummary, ProjectDetail, TaskGraphSnapshot, DomainEvent } from "./types.js";
-import { GitBranch, FileCode, AlertOctagon, Terminal } from "lucide-react";
+import { GitBranch, FileCode, AlertOctagon, Activity, Terminal } from "lucide-react";
 
 export function App() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -25,8 +26,8 @@ export function App() {
   const [events, setEvents] = useState<DomainEvent[]>([]);
   const [isConnected, setIsConnected] = useState(false);
 
-  // Active Tab: "PIPELINE" | "ARTIFACTS" | "FAILURES"
-  const [activeTab, setActiveTab] = useState<"PIPELINE" | "ARTIFACTS" | "FAILURES">("PIPELINE");
+  // Active Tab: "PIPELINE" | "ARTIFACTS" | "FAILURES" | "METRICS"
+  const [activeTab, setActiveTab] = useState<"PIPELINE" | "ARTIFACTS" | "FAILURES" | "METRICS">("PIPELINE");
 
   // Modals
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
@@ -186,6 +187,14 @@ export function App() {
             <AlertOctagon size={15} />
             <span>Recovery & Circuit Breakers</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab("METRICS")}
+            className={`btn ${activeTab === "METRICS" ? "btn-primary" : "btn-secondary"}`}
+          >
+            <Activity size={15} />
+            <span>Metrics & Observability</span>
+          </button>
         </div>
 
         {/* Tab 1: Pipeline & Event Terminal */}
@@ -207,6 +216,11 @@ export function App() {
         {/* Tab 3: Failures & Recovery */}
         {activeTab === "FAILURES" && (
           <FailureExplorer events={events} projectDetail={projectDetail} />
+        )}
+
+        {/* Tab 4: Metrics & Observability */}
+        {activeTab === "METRICS" && (
+          <MetricsDashboard projectId={selectedProjectId} />
         )}
       </main>
 

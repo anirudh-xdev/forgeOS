@@ -503,3 +503,73 @@ export const GateDecisionRequestSchema = z.object({
 
 export type GateDecisionRequest = z.infer<typeof GateDecisionRequestSchema>;
 
+// ==========================================
+// 14. Observability & Telemetry Contracts (Phase 11)
+// ==========================================
+
+export const AgentMetricSummarySchema = z.object({
+  agentId: z.string(),
+  role: z.string(),
+  runs: z.number().int().nonnegative(),
+  successfulRuns: z.number().int().nonnegative(),
+  failedRuns: z.number().int().nonnegative(),
+  avgLatencyMs: z.number().nonnegative(),
+  totalInputTokens: z.number().int().nonnegative(),
+  totalOutputTokens: z.number().int().nonnegative(),
+  totalTokens: z.number().int().nonnegative(),
+  costUSD: z.number().nonnegative(),
+});
+
+export type AgentMetricSummary = z.infer<typeof AgentMetricSummarySchema>;
+
+export const BudgetStatusSchema = z.object({
+  maxTokens: z.number().int().positive(),
+  usedTokens: z.number().int().nonnegative(),
+  remainingTokens: z.number().int(),
+  tokenUtilization: z.number().nonnegative(),
+  maxCostUSD: z.number().nonnegative(),
+  usedCostUSD: z.number().nonnegative(),
+  remainingCostUSD: z.number(),
+  costUtilization: z.number().nonnegative(),
+  maxRuntimeMinutes: z.number().int().positive(),
+  isExceeded: z.boolean(),
+});
+
+export type BudgetStatus = z.infer<typeof BudgetStatusSchema>;
+
+export const ProjectMetricsSchema = z.object({
+  projectId: z.string().uuid(),
+  totalRuns: z.number().int().nonnegative(),
+  successfulRuns: z.number().int().nonnegative(),
+  failedRuns: z.number().int().nonnegative(),
+  successRate: z.number().min(0).max(100),
+  totalLatencyMs: z.number().nonnegative(),
+  avgLatencyMs: z.number().nonnegative(),
+  totalInputTokens: z.number().int().nonnegative(),
+  totalOutputTokens: z.number().int().nonnegative(),
+  totalTokens: z.number().int().nonnegative(),
+  totalCostUSD: z.number().nonnegative(),
+  budget: BudgetStatusSchema,
+  agentBreakdown: z.array(AgentMetricSummarySchema),
+});
+
+export type ProjectMetrics = z.infer<typeof ProjectMetricsSchema>;
+
+export const TraceSpanRecordSchema = z.object({
+  id: z.string(),
+  traceId: z.string(),
+  spanId: z.string(),
+  parentSpanId: z.string().optional(),
+  name: z.string(),
+  startTime: z.string().datetime(),
+  endTime: z.string().datetime().optional(),
+  durationMs: z.number().nonnegative(),
+  attributes: z.record(z.unknown()),
+  status: z.object({
+    code: z.enum(["UNSET", "OK", "ERROR"]),
+    message: z.string().optional(),
+  }),
+});
+
+export type TraceSpanRecord = z.infer<typeof TraceSpanRecordSchema>;
+

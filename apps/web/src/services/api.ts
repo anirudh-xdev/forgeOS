@@ -53,3 +53,15 @@ export async function submitGateDecision(
   if (!res.ok) throw new Error(`Failed to submit gate decision (${res.status})`);
   return res.json();
 }
+
+export async function fetchProjectMetrics(projectId: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/api/projects/${projectId}/metrics`);
+  if (!res.ok) throw new Error(`Failed to fetch project metrics (${res.status})`);
+  return res.json();
+}
+
+export async function fetchProjectTraces(projectId: string): Promise<{ projectId: string; spans: any[] }> {
+  const res = await fetch(`${API_BASE}/api/projects/${projectId}/traces`);
+  if (!res.ok) throw new Error(`Failed to fetch project traces (${res.status})`);
+  return res.json();
+}

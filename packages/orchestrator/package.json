@@ -23,6 +23,7 @@
     "@forgeos/contracts": "workspace:*",
     "@forgeos/database": "workspace:*",
     "@forgeos/event-bus": "workspace:*",
+    "@forgeos/logger": "workspace:*",
     "@forgeos/recovery": "workspace:*",
     "@forgeos/shared": "workspace:*",
     "bullmq": "^5.41.0",

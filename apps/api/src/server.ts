@@ -8,6 +8,7 @@ import { AIProvider, MockProvider, OllamaProvider } from "@forgeos/ai-provider";
 import { RecoveryStrategy } from "@forgeos/recovery";
 import { SocketGateway } from "./socket.js";
 import { projectsRoutes } from "./routes/projects.routes.js";
+import { defaultMetricsRegistry } from "@forgeos/logger";
 
 export interface ServerOptions {
   port?: number;
@@ -102,7 +103,13 @@ export async function buildServer(options: ServerOptions = {}): Promise<ForgeOSS
     };
   });
 
-  // 8. Register Routes
+  // 8. Prometheus Metrics Endpoint (Phase 11)
+  app.get("/metrics", async (_req, reply) => {
+    reply.header("Content-Type", defaultMetricsRegistry.getContentType());
+    return reply.send(await defaultMetricsRegistry.getMetrics());
+  });
+
+  // 9. Register Routes
   await app.register(projectsRoutes, {
     prefix: "/api",
     orchestrator,
