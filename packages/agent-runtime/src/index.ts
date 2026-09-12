@@ -6,3 +6,4 @@ export * from "./agents/architect.agent.js";
 export * from "./agents/database.agent.js";
 export * from "./agents/backend.agent.js";
 export * from "./agents/frontend.agent.js";
+export * from "./tools/sandbox-tools.js";

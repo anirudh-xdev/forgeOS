@@ -320,3 +320,31 @@ export const UISpecificationContentSchema = z.object({
 
 export type UISpecificationContent = z.infer<typeof UISpecificationContentSchema>;
 
+export const SandboxExecutionResultSchema = z.object({
+  exitCode: z.number(),
+  stdout: z.string(),
+  stderr: z.string(),
+  durationMs: z.number(),
+  timedOut: z.boolean(),
+});
+
+export type SandboxExecutionResult = z.infer<typeof SandboxExecutionResultSchema>;
+
+export const TestReportContentSchema = z.object({
+  passed: z.boolean(),
+  totalTests: z.number(),
+  passedTests: z.number(),
+  failedTests: z.number(),
+  durationMs: z.number(),
+  suites: z.array(
+    z.object({
+      name: z.string(),
+      passed: z.boolean(),
+      error: z.string().optional(),
+    })
+  ),
+  summary: z.string(),
+});
+
+export type TestReportContent = z.infer<typeof TestReportContentSchema>;
+

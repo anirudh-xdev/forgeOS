@@ -1,5 +1,5 @@
 {
-  "name": "@forgeos/agent-runtime",
+  "name": "@forgeos/sandbox",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -18,11 +18,8 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@forgeos/ai-provider": "workspace:*",
     "@forgeos/contracts": "workspace:*",
-    "@forgeos/sandbox": "workspace:*",
-    "@forgeos/shared": "workspace:*",
-    "zod": "^3.24.2"
+    "@forgeos/shared": "workspace:*"
   },
   "devDependencies": {
     "rimraf": "^6.0.1",
