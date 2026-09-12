@@ -444,3 +444,62 @@ export const RecoveryStrategyTypeSchema = z.enum([
 
 export type RecoveryStrategyType = z.infer<typeof RecoveryStrategyTypeSchema>;
 
+// ==========================================
+// 14. API & Realtime UI Contracts (Phase 10)
+// ==========================================
+
+export const CreateProjectRequestSchema = z.object({
+  requirement: z.string().min(5),
+  projectId: z.string().uuid().optional(),
+  workflowType: z.enum(["requirement_to_architecture", "full_factory"]).default("full_factory"),
+  enableGates: z.boolean().optional(),
+  enableRecovery: z.boolean().optional(),
+});
+
+export type CreateProjectRequest = z.infer<typeof CreateProjectRequestSchema>;
+
+export const CreateProjectResponseSchema = z.object({
+  projectId: z.string().uuid(),
+  status: z.string(),
+  message: z.string(),
+});
+
+export type CreateProjectResponse = z.infer<typeof CreateProjectResponseSchema>;
+
+export const TaskNodeSchema = z.object({
+  id: z.string(),
+  agentId: z.string(),
+  role: z.string(),
+  status: TaskStatusSchema,
+  retryCount: z.number().int().nonnegative().default(0),
+  input: z.unknown(),
+  dependencies: z.array(z.string()),
+});
+
+export type TaskNode = z.infer<typeof TaskNodeSchema>;
+
+export const TaskEdgeSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+});
+
+export type TaskEdge = z.infer<typeof TaskEdgeSchema>;
+
+export const TaskGraphSnapshotSchema = z.object({
+  projectId: z.string(),
+  nodes: z.array(TaskNodeSchema),
+  edges: z.array(TaskEdgeSchema),
+  isComplete: z.boolean(),
+  hasFailures: z.boolean(),
+});
+
+export type TaskGraphSnapshot = z.infer<typeof TaskGraphSnapshotSchema>;
+
+export const GateDecisionRequestSchema = z.object({
+  action: z.enum(["approve", "reject"]),
+  reason: z.string().optional(),
+  overrideFeedback: z.string().optional(),
+});
+
+export type GateDecisionRequest = z.infer<typeof GateDecisionRequestSchema>;
+

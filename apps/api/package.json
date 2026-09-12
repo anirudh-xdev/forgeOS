@@ -1,0 +1,42 @@
+{
+  "name": "@forgeos/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "dev": "node dist/server.js",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.2",
+    "@forgeos/agent-runtime": "workspace:*",
+    "@forgeos/ai-provider": "workspace:*",
+    "@forgeos/contracts": "workspace:*",
+    "@forgeos/database": "workspace:*",
+    "@forgeos/event-bus": "workspace:*",
+    "@forgeos/orchestrator": "workspace:*",
+    "@forgeos/recovery": "workspace:*",
+    "@forgeos/shared": "workspace:*",
+    "fastify": "^5.2.1",
+    "socket.io": "^4.8.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.9",
+    "rimraf": "^6.0.1",
+    "socket.io-client": "^4.8.1",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.7"
+  }
+}

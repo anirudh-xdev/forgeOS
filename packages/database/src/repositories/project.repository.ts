@@ -134,6 +134,20 @@ export class ProjectRepository {
     });
   }
 
+  public async listProjects() {
+    return this.prisma.project.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        budget: true,
+        tasks: true,
+        artifacts: true,
+        events: {
+          orderBy: { timestamp: "asc" },
+        },
+      },
+    });
+  }
+
   public async saveAgentTask(data: SaveTaskInput) {
     // Ensure agent exists first if not present
     await this.findOrCreateAgent({
