@@ -96,6 +96,7 @@ export const DomainEventTypeSchema = z.enum([
   "PROJECT_FAILED",
   "BUDGET_EXCEEDED",
   "LOOP_DETECTED",
+  "TASK_ROUTED",
 ]);
 
 export type DomainEventType = z.infer<typeof DomainEventTypeSchema>;
@@ -445,6 +446,74 @@ export const RecoveryStrategyTypeSchema = z.enum([
 export type RecoveryStrategyType = z.infer<typeof RecoveryStrategyTypeSchema>;
 
 // ==========================================
+// 15. Dynamic Agent Selection & Routing Contracts (Phase 12)
+// ==========================================
+
+export const RoutingStrategySchema = z.enum([
+  "BALANCED",
+  "BEST_QUALITY",
+  "COST_OPTIMIZED",
+  "LATENCY_OPTIMIZED",
+]);
+
+export type RoutingStrategy = z.infer<typeof RoutingStrategySchema>;
+
+export const ModelTierSchema = z.enum([
+  "tier_fast",
+  "tier_balanced",
+  "tier_reasoning",
+]);
+
+export type ModelTier = z.infer<typeof ModelTierSchema>;
+
+export const AgentScoreRecordSchema = z.object({
+  agentId: z.string(),
+  role: z.string(),
+  model: z.string(),
+  tier: ModelTierSchema,
+  totalRuns: z.number().int().nonnegative(),
+  successRate: z.number().min(0).max(1),
+  avgLatencyMs: z.number().nonnegative(),
+  avgCostUSD: z.number().nonnegative(),
+  capabilityScore: z.number().min(0).max(1),
+  compositeScore: z.number().min(0).max(100),
+  rank: z.number().int().positive(),
+});
+
+export type AgentScoreRecord = z.infer<typeof AgentScoreRecordSchema>;
+
+export const DynamicRoutingDecisionSchema = z.object({
+  taskId: z.string(),
+  requiredCapabilities: z.array(z.string()),
+  selectedAgentId: z.string(),
+  selectedModel: z.string(),
+  selectedTier: ModelTierSchema,
+  strategy: RoutingStrategySchema,
+  confidenceScore: z.number().min(0).max(1),
+  reasoning: z.string(),
+});
+
+export type DynamicRoutingDecision = z.infer<typeof DynamicRoutingDecisionSchema>;
+
+export const AgentScoreboardSchema = z.object({
+  strategy: RoutingStrategySchema,
+  totalAgents: z.number().int().nonnegative(),
+  scores: z.array(AgentScoreRecordSchema),
+  timestamp: z.string().datetime(),
+});
+
+export type AgentScoreboard = z.infer<typeof AgentScoreboardSchema>;
+
+export const RecommendAgentRequestSchema = z.object({
+  directive: z.string().min(3),
+  strategy: RoutingStrategySchema.optional().default("BALANCED"),
+  budgetUtilization: z.number().min(0).max(100).optional(),
+  attemptCount: z.number().int().nonnegative().optional(),
+});
+
+export type RecommendAgentRequest = z.infer<typeof RecommendAgentRequestSchema>;
+
+// ==========================================
 // 14. API & Realtime UI Contracts (Phase 10)
 // ==========================================
 
@@ -454,6 +523,7 @@ export const CreateProjectRequestSchema = z.object({
   workflowType: z.enum(["requirement_to_architecture", "full_factory"]).default("full_factory"),
   enableGates: z.boolean().optional(),
   enableRecovery: z.boolean().optional(),
+  routingStrategy: RoutingStrategySchema.optional(),
 });
 
 export type CreateProjectRequest = z.infer<typeof CreateProjectRequestSchema>;

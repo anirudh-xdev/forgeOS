@@ -65,3 +65,27 @@ export async function fetchProjectTraces(projectId: string): Promise<{ projectId
   if (!res.ok) throw new Error(`Failed to fetch project traces (${res.status})`);
   return res.json();
 }
+
+export async function fetchRouterScoreboard(strategy: string = "BALANCED"): Promise<any> {
+  const res = await fetch(`${API_BASE}/api/router/scoreboard?strategy=${strategy}`);
+  if (!res.ok) throw new Error(`Failed to fetch agent scoreboard (${res.status})`);
+  return res.json();
+}
+
+export async function requestAgentRecommendation(payload: {
+  directive: string;
+  strategy?: string;
+  budgetUtilization?: number;
+  attemptCount?: number;
+}): Promise<any> {
+  const res = await fetch(`${API_BASE}/api/router/recommend`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => ({}));
+    throw new Error(errorBody.error || `Failed to fetch recommendation (${res.status})`);
+  }
+  return res.json();
+}

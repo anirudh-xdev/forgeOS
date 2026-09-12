@@ -71,4 +71,10 @@ export type {
   ProjectMetrics,
   TraceSpanRecord,
   AgentMetricSummary,
+  RoutingStrategy,
+  ModelTier,
+  AgentScoreRecord,
+  DynamicRoutingDecision,
+  AgentScoreboard,
+  RecommendAgentRequest,
 } from "@forgeos/contracts";

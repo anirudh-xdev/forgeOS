@@ -4,4 +4,7 @@ export * from "./queue/agent-queue.js";
 export * from "./queue/agent-worker.js";
 export * from "./gates/approval-gate.js";
 export * from "./budget/budget-manager.js";
+export * from "./routing/capability-matcher.js";
+export * from "./routing/agent-scorer.js";
+export * from "./routing/dynamic-agent-router.js";
 export * from "@forgeos/recovery";

@@ -7,8 +7,10 @@ import {
   TaskNode,
   TaskEdge,
   DomainEventType,
+  RoutingStrategySchema,
+  RecommendAgentRequestSchema,
 } from "@forgeos/contracts";
-import { WorkflowOrchestrator } from "@forgeos/orchestrator";
+import { WorkflowOrchestrator, defaultDynamicRouter } from "@forgeos/orchestrator";
 import { ProjectRepository, ArtifactRepository } from "@forgeos/database";
 import { SocketGateway } from "../socket.js";
 import { EventBus } from "@forgeos/event-bus";
@@ -60,6 +62,7 @@ export const projectsRoutes: FastifyPluginAsync<ProjectsRoutesOptions> = async (
             requirement: data.requirement,
             enableGates: data.enableGates,
             enableRecovery: data.enableRecovery,
+            routingStrategy: data.routingStrategy,
           });
         } else {
           await orchestrator.runFullSoftwareFactoryWorkflow({
@@ -67,6 +70,7 @@ export const projectsRoutes: FastifyPluginAsync<ProjectsRoutesOptions> = async (
             requirement: data.requirement,
             enableGates: data.enableGates,
             enableRecovery: data.enableRecovery,
+            routingStrategy: data.routingStrategy,
           });
         }
       } catch (err) {
@@ -402,4 +406,40 @@ export const projectsRoutes: FastifyPluginAsync<ProjectsRoutesOptions> = async (
       spans: synthesizedSpans,
     });
   });
+
+  // 9. GET /api/router/scoreboard - Agent Matrix & Performance Leaderboard (Phase 12)
+  fastify.get<{ Querystring: { strategy?: string } }>("/router/scoreboard", async (request, reply) => {
+    const strategyParam = request.query?.strategy;
+    const parsed = RoutingStrategySchema.safeParse(strategyParam);
+    const strategy = parsed.success ? parsed.data : "BALANCED";
+    const scoreboard = await defaultDynamicRouter.getScoreboard(strategy);
+    return reply.send(scoreboard);
+  });
+
+  // 10. POST /api/router/recommend - Dynamic Agent & Model Recommendation (Phase 12)
+  fastify.post("/router/recommend", async (request, reply) => {
+    const parseResult = RecommendAgentRequestSchema.safeParse(request.body);
+    if (!parseResult.success) {
+      return reply.status(400).send({
+        error: "Invalid agent recommendation request",
+        details: parseResult.error.issues,
+      });
+    }
+
+    const { directive, strategy, budgetUtilization, attemptCount } = parseResult.data;
+    const decision = defaultDynamicRouter.selectOptimalAgent(
+      {
+        id: randomUUID(),
+        input: { directive },
+      },
+      {
+        strategy,
+        budgetUtilization,
+        attemptCount,
+      }
+    );
+
+    return reply.send(decision);
+  });
 };
+

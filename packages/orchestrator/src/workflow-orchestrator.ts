@@ -18,6 +18,7 @@ import {
   DatabaseSchemaContentSchema,
   BackendImplementationContentSchema,
   UISpecificationContentSchema,
+  RoutingStrategy,
 } from "@forgeos/contracts";
 import { ArtifactRepository, ProjectRepository } from "@forgeos/database";
 import { EventBus } from "@forgeos/event-bus";
@@ -26,6 +27,10 @@ import { TaskGraph } from "./task-graph.js";
 import { ApprovalGateEngine } from "./gates/approval-gate.js";
 import { RecoveryStrategy, FailureContext } from "@forgeos/recovery";
 import { BudgetManager } from "./budget/budget-manager.js";
+import {
+  DynamicAgentRouter,
+  defaultDynamicRouter,
+} from "./routing/dynamic-agent-router.js";
 import {
   defaultTracer,
   defaultMetricsRegistry,
@@ -37,6 +42,7 @@ export interface WorkflowOptions {
   requirement: string;
   enableGates?: boolean;
   enableRecovery?: boolean;
+  routingStrategy?: RoutingStrategy;
 }
 
 export interface WorkflowRepositories {
@@ -59,19 +65,22 @@ export class WorkflowOrchestrator {
   private eventBus?: EventBus;
   private gateEngine?: ApprovalGateEngine;
   private recoveryStrategy?: RecoveryStrategy;
+  private dynamicRouter?: DynamicAgentRouter;
 
   constructor(
     runner: AgentRunner,
     repositories?: WorkflowRepositories,
     eventBus?: EventBus,
     gateEngine?: ApprovalGateEngine,
-    recoveryStrategy?: RecoveryStrategy
+    recoveryStrategy?: RecoveryStrategy,
+    dynamicRouter?: DynamicAgentRouter
   ) {
     this.runner = runner;
     this.repositories = repositories;
     this.eventBus = eventBus;
     this.gateEngine = gateEngine;
     this.recoveryStrategy = recoveryStrategy ?? new RecoveryStrategy();
+    this.dynamicRouter = dynamicRouter ?? defaultDynamicRouter;
   }
 
   public getRecoveryStrategy(): RecoveryStrategy | undefined {
@@ -166,7 +175,8 @@ export class WorkflowOrchestrator {
       graph,
       options.requirement,
       options.enableGates,
-      options.enableRecovery
+      options.enableRecovery,
+      options.routingStrategy
     );
   }
 
@@ -200,7 +210,9 @@ export class WorkflowOrchestrator {
       id: archTaskId,
       projectId,
       agentId: ArchitectAgentDefinition.id,
-      input: { directive: "Design system topology, database, APIs, and ADRs." },
+      input: {
+        directive: "Generate Architecture Specification based on approved Product Specification.",
+      },
       dependencies: [pmTaskId],
       status: "PENDING",
       retryCount: 0,
@@ -208,13 +220,15 @@ export class WorkflowOrchestrator {
       updatedAt: new Date().toISOString(),
     });
 
-    // 3. Database Agent Node (Depends on Architect)
+    // 3. Database Engineer Node (runs in parallel with Frontend)
     const dbTaskId = randomUUID();
     graph.addTask({
       id: dbTaskId,
       projectId,
       agentId: DatabaseAgentDefinition.id,
-      input: { directive: "Create normalized PostgreSQL schema with Prisma models." },
+      input: {
+        directive: "Design relational database models and schema with indexing strategies.",
+      },
       dependencies: [archTaskId],
       status: "PENDING",
       retryCount: 0,
@@ -222,13 +236,15 @@ export class WorkflowOrchestrator {
       updatedAt: new Date().toISOString(),
     });
 
-    // 4. Frontend Agent Node (Depends on Architect - Runs in PARALLEL with Database Agent!)
-    const frontendTaskId = randomUUID();
+    // 4. Frontend Engineer Node (runs in parallel with Database)
+    const uiTaskId = randomUUID();
     graph.addTask({
-      id: frontendTaskId,
+      id: uiTaskId,
       projectId,
       agentId: FrontendAgentDefinition.id,
-      input: { directive: "Design Next.js client routes, layout, and components." },
+      input: {
+        directive: "Design user interface components and state management architecture.",
+      },
       dependencies: [archTaskId],
       status: "PENDING",
       retryCount: 0,
@@ -236,14 +252,16 @@ export class WorkflowOrchestrator {
       updatedAt: new Date().toISOString(),
     });
 
-    // 5. Backend Agent Node (Depends on Database + Architect)
+    // 5. Backend Engineer Node (depends on BOTH Database AND Frontend)
     const backendTaskId = randomUUID();
     graph.addTask({
       id: backendTaskId,
       projectId,
       agentId: BackendAgentDefinition.id,
-      input: { directive: "Implement Fastify route handlers, service layer, and unit tests." },
-      dependencies: [dbTaskId, archTaskId],
+      input: {
+        directive: "Implement Fastify service endpoints, business logic, and database queries.",
+      },
+      dependencies: [dbTaskId, uiTaskId],
       status: "PENDING",
       retryCount: 0,
       createdAt: new Date().toISOString(),
@@ -255,7 +273,8 @@ export class WorkflowOrchestrator {
       graph,
       options.requirement,
       options.enableGates,
-      options.enableRecovery
+      options.enableRecovery,
+      options.routingStrategy
     );
   }
 
@@ -268,7 +287,8 @@ export class WorkflowOrchestrator {
       graph,
       options.requirement,
       options.enableGates,
-      options.enableRecovery
+      options.enableRecovery,
+      options.routingStrategy
     );
   }
 
@@ -277,7 +297,8 @@ export class WorkflowOrchestrator {
     graph: TaskGraph,
     requirement: string,
     enableGates?: boolean,
-    enableRecovery?: boolean
+    enableRecovery?: boolean,
+    routingStrategy?: RoutingStrategy
   ): Promise<WorkflowResult> {
     const artifacts: Artifact[] = [];
     const events: DomainEvent[] = [];
@@ -359,10 +380,24 @@ export class WorkflowOrchestrator {
         );
       }
 
+      let currentBudgetUtilization: number | undefined = undefined;
+
       // Pre-Execution Budget Verification (Specification Section 19)
       if (this.repositories) {
         const budgetManager = new BudgetManager(this.repositories.projectRepo);
         const budgetCheck = await budgetManager.checkBudget(projectId);
+        if (budgetCheck.budget) {
+          const tokenUtil =
+            budgetCheck.budget.maxTokens > 0
+              ? (budgetCheck.budget.usedTokens / budgetCheck.budget.maxTokens) * 100
+              : 0;
+          const costUtil =
+            budgetCheck.budget.maxCostUSD > 0
+              ? (budgetCheck.budget.usedCostUSD / budgetCheck.budget.maxCostUSD) * 100
+              : 0;
+          currentBudgetUtilization = Math.max(tokenUtil, costUtil);
+        }
+
         if (!budgetCheck.allowed) {
           await recordEvent("BUDGET_EXCEEDED", {
             reason: budgetCheck.reason,
@@ -401,6 +436,28 @@ export class WorkflowOrchestrator {
       // Execute ready tasks CONCURRENTLY in PARALLEL with OpenTelemetry tracing & telemetry
       const results = await Promise.all(
         readyTasks.map(async (task) => {
+          // Phase 12: Dynamic Agent & Model Routing
+          const router = this.dynamicRouter ?? defaultDynamicRouter;
+          const routingDecision = router.selectOptimalAgent(task, {
+            strategy: routingStrategy,
+            attemptCount: (task.retryCount ?? 0) + 1,
+            budgetUtilization: currentBudgetUtilization,
+          });
+
+          await recordEvent(
+            "TASK_ROUTED",
+            {
+              agentId: routingDecision.selectedAgentId,
+              model: routingDecision.selectedModel,
+              tier: routingDecision.selectedTier,
+              strategy: routingDecision.strategy,
+              confidenceScore: routingDecision.confidenceScore,
+              reasoning: routingDecision.reasoning,
+              capabilities: routingDecision.requiredCapabilities,
+            },
+            task.id
+          );
+
           const { definition, targetSchema, artifactType, approvalEvent } =
             this.resolveAgentDefinition(task.agentId);
 
@@ -496,6 +553,15 @@ export class WorkflowOrchestrator {
               inputTokens,
               outputTokens,
               costUSD,
+            });
+
+            // Update Dynamic Router performance cache (Phase 12)
+            router.recordOutcome({
+              agentId: definition.id,
+              model: result.runRecord.model,
+              latencyMs: result.runRecord.latencyMs ?? 0,
+              costUSD,
+              success: result.success,
             });
           }
 

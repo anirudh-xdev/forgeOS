@@ -195,4 +195,49 @@ describe("Fastify API Server & Socket.IO Gateway (Phase 10)", () => {
     expect(body.projectId).toBe(projectId);
     expect(Array.isArray(body.spans)).toBe(true);
   });
+
+  it("should return agent scoreboard at GET /api/router/scoreboard", async () => {
+    const response = await serverInstance.app.inject({
+      method: "GET",
+      url: "/api/router/scoreboard?strategy=COST_OPTIMIZED",
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.strategy).toBe("COST_OPTIMIZED");
+    expect(body.totalAgents).toBe(8);
+    expect(Array.isArray(body.scores)).toBe(true);
+    expect(body.scores[0].rank).toBe(1);
+  });
+
+  it("should recommend optimal agent at POST /api/router/recommend", async () => {
+    const response = await serverInstance.app.inject({
+      method: "POST",
+      url: "/api/router/recommend",
+      payload: {
+        directive: "Design normalized database tables and Prisma migration schema",
+        strategy: "BALANCED",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.selectedAgentId).toBe("forgeos-database-agent");
+    expect(body.requiredCapabilities).toContain("schema_design");
+    expect(body.confidenceScore).toBeGreaterThan(0.5);
+  });
+
+  it("should reject invalid recommendation payload at POST /api/router/recommend", async () => {
+    const response = await serverInstance.app.inject({
+      method: "POST",
+      url: "/api/router/recommend",
+      payload: {
+        directive: "x", // too short
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    const body = JSON.parse(response.body);
+    expect(body.error).toContain("Invalid agent recommendation request");
+  });
 });

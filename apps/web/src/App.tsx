@@ -5,6 +5,7 @@ import { EventTerminal } from "./components/EventTerminal.js";
 import { ArtifactExplorer } from "./components/ArtifactExplorer.js";
 import { FailureExplorer } from "./components/FailureExplorer.js";
 import { MetricsDashboard } from "./components/MetricsDashboard.js";
+import { AgentMatrix } from "./components/AgentMatrix.js";
 import { HumanApprovalModal } from "./components/HumanApprovalModal.js";
 import { NewProjectModal } from "./components/NewProjectModal.js";
 import { socketService } from "./services/socket.js";
@@ -16,7 +17,7 @@ import {
   submitGateDecision,
 } from "./services/api.js";
 import { ProjectSummary, ProjectDetail, TaskGraphSnapshot, DomainEvent } from "./types.js";
-import { GitBranch, FileCode, AlertOctagon, Activity, Terminal } from "lucide-react";
+import { GitBranch, FileCode, AlertOctagon, Activity, Terminal, Cpu } from "lucide-react";
 
 export function App() {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
@@ -26,8 +27,8 @@ export function App() {
   const [events, setEvents] = useState<DomainEvent[]>([]);
   const [isConnected, setIsConnected] = useState(false);
 
-  // Active Tab: "PIPELINE" | "ARTIFACTS" | "FAILURES" | "METRICS"
-  const [activeTab, setActiveTab] = useState<"PIPELINE" | "ARTIFACTS" | "FAILURES" | "METRICS">("PIPELINE");
+  // Active Tab: "PIPELINE" | "ARTIFACTS" | "FAILURES" | "METRICS" | "MATRIX"
+  const [activeTab, setActiveTab] = useState<"PIPELINE" | "ARTIFACTS" | "FAILURES" | "METRICS" | "MATRIX">("PIPELINE");
 
   // Modals
   const [isNewProjectOpen, setIsNewProjectOpen] = useState(false);
@@ -195,6 +196,14 @@ export function App() {
             <Activity size={15} />
             <span>Metrics & Observability</span>
           </button>
+
+          <button
+            onClick={() => setActiveTab("MATRIX")}
+            className={`btn ${activeTab === "MATRIX" ? "btn-primary" : "btn-secondary"}`}
+          >
+            <Cpu size={15} />
+            <span>Agent Matrix & Smart Router</span>
+          </button>
         </div>
 
         {/* Tab 1: Pipeline & Event Terminal */}
@@ -221,6 +230,11 @@ export function App() {
         {/* Tab 4: Metrics & Observability */}
         {activeTab === "METRICS" && (
           <MetricsDashboard projectId={selectedProjectId} />
+        )}
+
+        {/* Tab 5: Dynamic Agent Selection & Matrix */}
+        {activeTab === "MATRIX" && (
+          <AgentMatrix />
         )}
       </main>
 
