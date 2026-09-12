@@ -95,6 +95,7 @@ export const DomainEventTypeSchema = z.enum([
   "PROJECT_COMPLETED",
   "PROJECT_FAILED",
   "BUDGET_EXCEEDED",
+  "LOOP_DETECTED",
 ]);
 
 export type DomainEventType = z.infer<typeof DomainEventTypeSchema>;
@@ -382,4 +383,64 @@ export const GateEvaluationResultSchema = z.object({
 });
 
 export type GateEvaluationResult = z.infer<typeof GateEvaluationResultSchema>;
+
+// ==========================================
+// 8. Failure Recovery & Loop Detection Contracts (Spec Section 16)
+// ==========================================
+
+export const FailureCategorySchema = z.enum([
+  "TRANSIENT",
+  "SYNTAX_ERROR",
+  "VALIDATION_ERROR",
+  "TEST_FAILURE",
+  "SECURITY_VIOLATION",
+  "CONTRACT_MISMATCH",
+  "ENVIRONMENT_ERROR",
+  "RESOURCE_EXHAUSTION",
+  "TERMINAL",
+  "UNKNOWN",
+]);
+
+export type FailureCategory = z.infer<typeof FailureCategorySchema>;
+
+export const FailureClassificationSchema = z.object({
+  category: FailureCategorySchema,
+  retryable: z.boolean(),
+  errorSignature: z.string(),
+  message: z.string(),
+  suggestedStrategy: z.string(),
+  details: z.record(z.unknown()).optional(),
+});
+
+export type FailureClassification = z.infer<typeof FailureClassificationSchema>;
+
+export const LoopTypeSchema = z.enum([
+  "DUPLICATE_ERROR",
+  "IDENTICAL_OUTPUT",
+  "OSCILLATING_OUTPUT",
+  "MAX_RETRIES_EXCEEDED",
+  "NONE",
+]);
+
+export type LoopType = z.infer<typeof LoopTypeSchema>;
+
+export const LoopDetectionResultSchema = z.object({
+  isLoop: z.boolean(),
+  loopType: LoopTypeSchema,
+  consecutiveFailures: z.number().int().nonnegative(),
+  signature: z.string().optional(),
+  message: z.string(),
+});
+
+export type LoopDetectionResult = z.infer<typeof LoopDetectionResultSchema>;
+
+export const RecoveryStrategyTypeSchema = z.enum([
+  "IMMEDIATE_RETRY",
+  "EXPONENTIAL_BACKOFF",
+  "PROMPT_AUGMENTATION",
+  "DELEGATE_SPECIALIST",
+  "CIRCUIT_BREAKER_HALT",
+]);
+
+export type RecoveryStrategyType = z.infer<typeof RecoveryStrategyTypeSchema>;
 

@@ -309,6 +309,9 @@ importers:
       '@forgeos/event-bus':
         specifier: workspace:*
         version: link:../event-bus
+      '@forgeos/recovery':
+        specifier: workspace:*
+        version: link:../recovery
       '@forgeos/shared':
         specifier: workspace:*
         version: link:../shared
@@ -318,6 +321,28 @@ importers:
       ioredis:
         specifier: ^5.6.0
         version: 5.11.1
+      zod:
+        specifier: ^3.24.2
+        version: 3.25.76
+    devDependencies:
+      rimraf:
+        specifier: ^6.0.1
+        version: 6.1.3
+      typescript:
+        specifier: ^5.8.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.7
+        version: 3.2.7(@types/node@22.20.2)(jiti@2.7.0)
+
+  packages/recovery:
+    dependencies:
+      '@forgeos/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@forgeos/shared':
+        specifier: workspace:*
+        version: link:../shared
       zod:
         specifier: ^3.24.2
         version: 3.25.76

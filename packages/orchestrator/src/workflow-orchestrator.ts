@@ -24,11 +24,13 @@ import { EventBus } from "@forgeos/event-bus";
 import { ForgeOSError } from "@forgeos/shared";
 import { TaskGraph } from "./task-graph.js";
 import { ApprovalGateEngine } from "./gates/approval-gate.js";
+import { RecoveryStrategy, FailureContext } from "@forgeos/recovery";
 
 export interface WorkflowOptions {
   projectId?: string;
   requirement: string;
   enableGates?: boolean;
+  enableRecovery?: boolean;
 }
 
 export interface WorkflowRepositories {
@@ -50,17 +52,24 @@ export class WorkflowOrchestrator {
   private repositories?: WorkflowRepositories;
   private eventBus?: EventBus;
   private gateEngine?: ApprovalGateEngine;
+  private recoveryStrategy?: RecoveryStrategy;
 
   constructor(
     runner: AgentRunner,
     repositories?: WorkflowRepositories,
     eventBus?: EventBus,
-    gateEngine?: ApprovalGateEngine
+    gateEngine?: ApprovalGateEngine,
+    recoveryStrategy?: RecoveryStrategy
   ) {
     this.runner = runner;
     this.repositories = repositories;
     this.eventBus = eventBus;
     this.gateEngine = gateEngine;
+    this.recoveryStrategy = recoveryStrategy ?? new RecoveryStrategy();
+  }
+
+  public getRecoveryStrategy(): RecoveryStrategy | undefined {
+    return this.recoveryStrategy;
   }
 
   private resolveAgentDefinition(agentId: string) {
@@ -146,7 +155,13 @@ export class WorkflowOrchestrator {
       updatedAt: new Date().toISOString(),
     });
 
-    return this.executeGraph(projectId, graph, options.requirement, options.enableGates);
+    return this.executeGraph(
+      projectId,
+      graph,
+      options.requirement,
+      options.enableGates,
+      options.enableRecovery
+    );
   }
 
   /**
@@ -229,18 +244,39 @@ export class WorkflowOrchestrator {
       updatedAt: new Date().toISOString(),
     });
 
-    return this.executeGraph(projectId, graph, options.requirement, options.enableGates);
+    return this.executeGraph(
+      projectId,
+      graph,
+      options.requirement,
+      options.enableGates,
+      options.enableRecovery
+    );
+  }
+
+  public async executeCustomGraph(
+    graph: TaskGraph,
+    options: WorkflowOptions
+  ): Promise<WorkflowResult> {
+    return this.executeGraph(
+      graph.projectId,
+      graph,
+      options.requirement,
+      options.enableGates,
+      options.enableRecovery
+    );
   }
 
   private async executeGraph(
     projectId: string,
     graph: TaskGraph,
     requirement: string,
-    enableGates?: boolean
+    enableGates?: boolean,
+    enableRecovery?: boolean
   ): Promise<WorkflowResult> {
     const artifacts: Artifact[] = [];
     const events: DomainEvent[] = [];
     const shouldRunGates = enableGates ?? (this.gateEngine !== undefined);
+    const shouldRecover = (enableRecovery ?? true) && (this.recoveryStrategy !== undefined);
 
     // Initialize database persistence if repositories are configured
     if (this.repositories) {
@@ -374,6 +410,7 @@ export class WorkflowOrchestrator {
         if (result.success && result.artifact) {
           let isApproved = true;
           let failureReasons: string[] = [];
+          let gateTestOutput: string | undefined = undefined;
 
           if (shouldRunGates) {
             const gateEngine = this.gateEngine ?? new ApprovalGateEngine(this.runner);
@@ -437,6 +474,14 @@ export class WorkflowOrchestrator {
               }
             }
 
+            if (gateResult.reports.testReport) {
+              const suiteErrors = gateResult.reports.testReport.suites
+                .filter((s) => !s.passed && s.error)
+                .map((s) => `${s.name}: ${s.error}`)
+                .join("\n");
+              gateTestOutput = `${gateResult.reports.testReport.summary}${suiteErrors ? `\n${suiteErrors}` : ""}`;
+            }
+
             if (gateResult.passed) {
               result.artifact.status = "approved";
             } else {
@@ -470,6 +515,114 @@ export class WorkflowOrchestrator {
               await recordEvent(approvalEvent, { artifactId: result.artifact.id }, task.id);
             }
           } else {
+            // Gate Rejected -> Check Failure Recovery & Circuit Breaker
+            if (shouldRecover && this.recoveryStrategy) {
+              const failureContext: FailureContext = {
+                taskId: task.id,
+                projectId,
+                agentId: task.agentId,
+                attemptCount: (task.retryCount ?? 0) + 1,
+                error: `Gate evaluation failed: ${failureReasons.join("; ")}`,
+                rawOutput: result.runRecord?.rawOutput,
+                validationIssues: undefined,
+                testOutput: gateTestOutput || undefined,
+                gateReasons: failureReasons,
+              };
+
+              const plan = this.recoveryStrategy.planRecovery(
+                failureContext,
+                task.input as Record<string, unknown>
+              );
+
+              if (plan.loopCheck.isLoop) {
+                graph.updateTaskStatus(task.id, "FAILED");
+                if (this.repositories) {
+                  await this.repositories.artifactRepo.saveArtifact(result.artifact);
+                  await this.repositories.projectRepo.updateTaskStatus(task.id, "FAILED");
+                }
+
+                await recordEvent(
+                  "LOOP_DETECTED",
+                  {
+                    agentId: task.agentId,
+                    loopType: plan.loopCheck.loopType,
+                    consecutiveFailures: plan.loopCheck.consecutiveFailures,
+                    message: plan.loopCheck.message,
+                    errorSignature: plan.classification.errorSignature,
+                  },
+                  task.id
+                );
+
+                await recordEvent(
+                  "REVIEW_FAILED",
+                  {
+                    agentId: task.agentId,
+                    artifactId: result.artifact.id,
+                    reasons: failureReasons,
+                  },
+                  task.id
+                );
+
+                await recordEvent(
+                  "PROJECT_FAILED",
+                  { failedTaskId: task.id, reasons: failureReasons, loopDetected: true },
+                  task.id
+                );
+
+                return {
+                  projectId,
+                  status: "FAILED",
+                  artifacts,
+                  events,
+                  tasks: graph.getAllTasks(),
+                  error: `Circuit breaker tripped: ${plan.loopCheck.message}`,
+                };
+              }
+
+              if (plan.shouldRetry) {
+                graph.updateTaskStatus(task.id, "RETRYING");
+                if (this.repositories) {
+                  await this.repositories.projectRepo.updateTaskStatus(task.id, "RETRYING");
+                }
+
+                await recordEvent(
+                  "RETRY_REQUESTED",
+                  {
+                    agentId: task.agentId,
+                    attempt: (task.retryCount ?? 0) + 1,
+                    category: plan.classification.category,
+                    strategy: plan.strategy,
+                    errorSignature: plan.classification.errorSignature,
+                    delayMs: plan.backoffDelayMs,
+                    remediationAdvice: plan.augmentedInput?.remediationAdvice,
+                  },
+                  task.id
+                );
+
+                if (plan.backoffDelayMs > 0) {
+                  await new Promise((resolve) => setTimeout(resolve, plan.backoffDelayMs));
+                }
+
+                const updatedTask = graph.prepareRetry(
+                  task.id,
+                  plan.augmentedInput ? plan.augmentedInput.augmentedInput : task.input
+                );
+
+                if (this.repositories) {
+                  await this.repositories.projectRepo.saveAgentTask({
+                    id: updatedTask.id,
+                    projectId,
+                    agentId: updatedTask.agentId,
+                    input: updatedTask.input as Record<string, unknown>,
+                    status: "PENDING",
+                  });
+                }
+
+                continue;
+              }
+            }
+
+            // Gate rejection without retry
             graph.updateTaskStatus(task.id, "FAILED");
             if (this.repositories) {
               await this.repositories.artifactRepo.saveArtifact(result.artifact);
@@ -502,6 +655,111 @@ export class WorkflowOrchestrator {
             };
           }
         } else {
+          // Agent runner execution failed -> Check Failure Recovery & Circuit Breaker
+          if (shouldRecover && this.recoveryStrategy) {
+            const failureContext: FailureContext = {
+              taskId: task.id,
+              projectId,
+              agentId: task.agentId,
+              attemptCount: (task.retryCount ?? 0) + 1,
+              error: result.error ?? "Agent execution failed",
+              rawOutput: result.runRecord?.rawOutput,
+              validationIssues: result.validationIssues,
+            };
+
+            const plan = this.recoveryStrategy.planRecovery(
+              failureContext,
+              task.input as Record<string, unknown>
+            );
+
+            if (plan.loopCheck.isLoop) {
+              graph.updateTaskStatus(task.id, "FAILED");
+              if (this.repositories) {
+                await this.repositories.projectRepo.updateTaskStatus(task.id, "FAILED");
+              }
+
+              await recordEvent(
+                "LOOP_DETECTED",
+                {
+                  agentId: task.agentId,
+                  loopType: plan.loopCheck.loopType,
+                  consecutiveFailures: plan.loopCheck.consecutiveFailures,
+                  message: plan.loopCheck.message,
+                  errorSignature: plan.classification.errorSignature,
+                },
+                task.id
+              );
+
+              await recordEvent(
+                "TASK_FAILED",
+                {
+                  agentId: task.agentId,
+                  error: plan.loopCheck.message,
+                  loopDetected: true,
+                },
+                task.id
+              );
+
+              await recordEvent(
+                "PROJECT_FAILED",
+                { failedTaskId: task.id, error: plan.loopCheck.message, loopDetected: true },
+                task.id
+              );
+
+              return {
+                projectId,
+                status: "FAILED",
+                artifacts,
+                events,
+                tasks: graph.getAllTasks(),
+                error: `Circuit breaker tripped: ${plan.loopCheck.message}`,
+              };
+            }
+
+            if (plan.shouldRetry) {
+              graph.updateTaskStatus(task.id, "RETRYING");
+              if (this.repositories) {
+                await this.repositories.projectRepo.updateTaskStatus(task.id, "RETRYING");
+              }
+
+              await recordEvent(
+                "RETRY_REQUESTED",
+                {
+                  agentId: task.agentId,
+                  attempt: (task.retryCount ?? 0) + 1,
+                  category: plan.classification.category,
+                  strategy: plan.strategy,
+                  errorSignature: plan.classification.errorSignature,
+                  delayMs: plan.backoffDelayMs,
+                  remediationAdvice: plan.augmentedInput?.remediationAdvice,
+                },
+                task.id
+              );
+
+              if (plan.backoffDelayMs > 0) {
+                await new Promise((resolve) => setTimeout(resolve, plan.backoffDelayMs));
+              }
+
+              const updatedTask = graph.prepareRetry(
+                task.id,
+                plan.augmentedInput ? plan.augmentedInput.augmentedInput : task.input
+              );
+
+              if (this.repositories) {
+                await this.repositories.projectRepo.saveAgentTask({
+                  id: updatedTask.id,
+                  projectId,
+                  agentId: updatedTask.agentId,
+                  input: updatedTask.input as Record<string, unknown>,
+                  status: "PENDING",
+                });
+              }
+
+              continue;
+            }
+          }
+
+          // Runner failure without retry
           graph.updateTaskStatus(task.id, "FAILED");
           if (this.repositories) {
             await this.repositories.projectRepo.updateTaskStatus(task.id, "FAILED");

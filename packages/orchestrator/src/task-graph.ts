@@ -35,6 +35,17 @@ export class TaskGraph {
     task.updatedAt = new Date().toISOString();
   }
 
+  public prepareRetry(taskId: string, augmentedInput?: unknown): AgentTask {
+    const task = this.getTask(taskId);
+    task.status = "PENDING";
+    task.retryCount = (task.retryCount ?? 0) + 1;
+    if (augmentedInput !== undefined) {
+      task.input = augmentedInput;
+    }
+    task.updatedAt = new Date().toISOString();
+    return task;
+  }
+
   public getReadyTasks(): AgentTask[] {
     const ready: AgentTask[] = [];
 
