@@ -1,0 +1,47 @@
+# ForgeOS Project Status & Milestone Tracker
+*Live tracking of development phases, active tasks, architectural decisions, technical debt, and risks.*
+
+---
+
+## 1. Executive Status Dashboard
+
+- **Current Phase**: **Phase 0 — Repository Setup**
+- **Completed Phases**: None (AI Infrastructure Bootstrap completed)
+- **Active Task**: Bootstrap verification and handoff for Phase 0 execution.
+- **Blocked Tasks**: None.
+- **Next Major Milestone**: Phase 0 completion (Monorepo setup, Docker Compose for Postgres + Redis).
+
+---
+
+## 2. Phase Progression Matrix
+
+| Phase | Description | Status | Completion Date |
+| :--- | :--- | :--- | :--- |
+| **Bootstrap** | AI Engineering Infrastructure (Rules, Skills, Docs) | **COMPLETED** | 2026-09-12 |
+| **Phase 0** | Repository Setup (Git, Monorepo, Docker Compose) | **READY TO START** | Pending |
+| **Phase 1** | AI Provider Layer (AIProvider, Mock, Ollama) | PENDING | Pending |
+| **Phase 2** | Agent Runtime (AgentDefinition, AgentRunner) | PENDING | Pending |
+| **Phase 3** | PM Agent (First specialized agent) | PENDING | Pending |
+| **Phase 4** | Orchestrator (Task graph, PM → Architect) | PENDING | Pending |
+| **Phase 5** | Artifact System (Persistence, versioning, status) | PENDING | Pending |
+| **Phase 6** | Parallel Agents (BullMQ worker queues) | PENDING | Pending |
+| **Phase 7** | Code Execution (Docker sandbox runner) | PENDING | Pending |
+| **Phase 8** | Review System (Reviewer, QA, Security gates) | PENDING | Pending |
+| **Phase 9** | Failure Recovery (Retry policy, loop detection) | PENDING | Pending |
+| **Phase 10** | Realtime UI (Next.js dashboard, Socket.IO) | PENDING | Pending |
+| **Phase 11** | Observability (OpenTelemetry, Prometheus, Grafana) | PENDING | Pending |
+| **Phase 12** | Dynamic Agent Selection (Scoring, smart router) | PENDING | Pending |
+
+---
+
+## 3. Recorded Architectural Decisions (ADRs)
+- `ADR-000`: Selection of pnpm + Turborepo for monorepo build orchestration (documented in `SPEC-GAPS.md`).
+- `ADR-001`: Selection of Fastify for API application framework (documented in `SPEC-GAPS.md`).
+- `ADR-002`: Deferral of vector databases in v0.1 in favor of standard PostgreSQL relational models (documented in `rules/05-database.md`).
+
+---
+
+## 4. Known Technical Debt & Risks
+- **Risk RSK-01**: Host execution risk for generated code — mitigated by Docker sandbox requirement in Phase 7.
+- **Risk RSK-02**: LLM non-determinism — mitigated by Zod schema validation pipeline and MockProvider in Phase 1.
+- **Debt DEBT-01**: Initial lack of multi-tenant auth — addressed via single-tenant local mode in Phase 0-4.
