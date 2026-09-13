@@ -3,10 +3,13 @@ import { AIProvider, GenerateRequest, GenerateResponse } from "../types.js";
 export class MockProvider implements AIProvider {
   public readonly name = "mock";
   private queuedResponses: Array<string | Partial<GenerateResponse>> = [];
+  private lastQueuedResponse?: string | Partial<GenerateResponse>;
+  private hasInitialQueue: boolean;
   private customHandler?: (request: GenerateRequest) => Promise<string> | string;
   public recordedCalls: GenerateRequest[] = [];
 
   constructor(defaultResponses?: Array<string | Partial<GenerateResponse>>) {
+    this.hasInitialQueue = Boolean(defaultResponses && defaultResponses.length > 0);
     if (defaultResponses) {
       this.queuedResponses.push(...defaultResponses);
     }
@@ -22,6 +25,8 @@ export class MockProvider implements AIProvider {
 
   public clear(): void {
     this.queuedResponses = [];
+    this.lastQueuedResponse = undefined;
+    this.hasInitialQueue = false;
     this.customHandler = undefined;
     this.recordedCalls = [];
   }
@@ -39,6 +44,15 @@ export class MockProvider implements AIProvider {
 
     if (this.queuedResponses.length > 0) {
       const next = this.queuedResponses.shift()!;
+      this.lastQueuedResponse = next;
+      if (typeof next === "string") {
+        content = next;
+      } else {
+        content = next.content ?? "";
+        usageOverride = next.usage;
+      }
+    } else if (this.hasInitialQueue && this.lastQueuedResponse !== undefined) {
+      const next = this.lastQueuedResponse;
       if (typeof next === "string") {
         content = next;
       } else {

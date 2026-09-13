@@ -15,6 +15,7 @@ import { ProjectRepository, ArtifactRepository } from "@forgeos/database";
 import { SocketGateway } from "../socket.js";
 import { EventBus } from "@forgeos/event-bus";
 import { defaultCostEstimator, defaultTracer } from "@forgeos/logger";
+import { CodebaseExporter } from "../exporter/codebase-exporter.js";
 
 export interface ProjectsRoutesOptions {
   orchestrator: WorkflowOrchestrator;
@@ -440,6 +441,36 @@ export const projectsRoutes: FastifyPluginAsync<ProjectsRoutesOptions> = async (
     );
 
     return reply.send(decision);
+  });
+
+  // 11. POST /api/projects/:id/export - Export deliverables to real codebase directory on disk
+  fastify.post<{ Params: { id: string } }>("/projects/:id/export", async (request, reply) => {
+    const { id } = request.params;
+    const project = await projectRepo.getProject(id);
+    if (!project) {
+      return reply.status(404).send({ error: `Project '${id}' not found.` });
+    }
+
+    const artifacts = await artifactRepo.listProjectArtifacts(id);
+    if (!artifacts || artifacts.length === 0) {
+      return reply.status(400).send({ error: "No artifacts available to export yet. Run workflow to completion first." });
+    }
+
+    const exporter = new CodebaseExporter();
+    const result = await exporter.exportProject(
+      {
+        id: project.id,
+        name: project.name,
+        requirement: project.requirement,
+      },
+      artifacts
+    );
+
+    return reply.send({
+      success: true,
+      message: `Successfully exported ${result.totalFiles} codebase files to ${result.exportDir}`,
+      ...result,
+    });
   });
 };
 

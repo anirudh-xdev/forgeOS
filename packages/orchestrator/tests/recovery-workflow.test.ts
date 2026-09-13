@@ -202,19 +202,22 @@ describe("WorkflowOrchestrator Failure Recovery & Circuit Breakers (Phase 9)", (
   });
 
   it("should trip circuit breaker when retry threshold is exceeded", async () => {
-    const broken = JSON.stringify({ invalid: true });
+    const broken1 = JSON.stringify({ invalid: 1 });
+    const broken2 = JSON.stringify({ invalid: 2 });
+    const broken3 = JSON.stringify({ invalid: 3 });
 
     const mockProvider = new MockProvider([
-      broken, broken, broken, // Attempt 1 failure
-      broken, broken, broken, // Attempt 2 failure
+      broken1, broken1, broken1, // Attempt 1 failure
+      broken2, broken2, broken2, // Attempt 2 failure
+      broken3, broken3, broken3, // Attempt 3 failure
     ]);
     const runner = new AgentRunner({ aiProvider: mockProvider });
 
-    // Max 2 retries allowed, with maxConsecutiveIdenticalErrors higher so maxRetries is tested
+    // Max 2 retries allowed, with maxConsecutiveIdenticalErrors and Outputs higher so maxRetries is tested
     const fastRecovery = new RecoveryStrategy(
       undefined,
       new RetryPolicy({ initialDelayMs: 0, jitter: false, maxRetries: 2 }),
-      new LoopDetector({ maxConsecutiveIdenticalErrors: 5, maxRetries: 2 })
+      new LoopDetector({ maxConsecutiveIdenticalErrors: 5, maxConsecutiveIdenticalOutputs: 5, maxRetries: 2 })
     );
 
     const orchestrator = new WorkflowOrchestrator(

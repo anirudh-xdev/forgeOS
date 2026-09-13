@@ -218,6 +218,7 @@ export function App() {
         {activeTab === "ARTIFACTS" && (
           <ArtifactExplorer
             artifacts={projectDetail?.artifacts ?? []}
+            projectId={selectedProjectId}
             onOpenGateDecision={(art) => setGateReviewArtifact(art)}
           />
         )}

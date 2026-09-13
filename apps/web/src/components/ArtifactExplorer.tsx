@@ -1,13 +1,39 @@
 import React, { useState } from "react";
-import { FileCode, Shield, CheckCircle2, AlertCircle, FileText, Database, Layers, Check, X, ShieldAlert } from "lucide-react";
+import { FileCode, Shield, CheckCircle2, AlertCircle, FileText, Database, Layers, Check, X, ShieldAlert, FolderDown, Loader2 } from "lucide-react";
 
 interface ArtifactExplorerProps {
   artifacts: any[];
+  projectId?: string | null;
   onOpenGateDecision: (artifact: any) => void;
 }
 
-export const ArtifactExplorer: React.FC<ArtifactExplorerProps> = ({ artifacts, onOpenGateDecision }) => {
+export const ArtifactExplorer: React.FC<ArtifactExplorerProps> = ({ artifacts, projectId, onOpenGateDecision }) => {
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+
+  const handleExport = async () => {
+    const targetProjectId = projectId ?? selectedArtifact?.projectId;
+    if (!targetProjectId) return;
+
+    setExporting(true);
+    setExportMessage(null);
+    try {
+      const res = await fetch(`http://localhost:3001/api/projects/${targetProjectId}/export`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setExportMessage(`Codebase exported successfully (${data.totalFiles} files) to: ${data.exportDir}`);
+      } else {
+        setExportMessage(`Export failed: ${data.error ?? "Unknown error"}`);
+      }
+    } catch (err: any) {
+      setExportMessage(`Export failed: ${err.message}`);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (!artifacts || artifacts.length === 0) {
     return (
@@ -29,6 +55,7 @@ export const ArtifactExplorer: React.FC<ArtifactExplorerProps> = ({ artifacts, o
       case "DatabaseSchema":
         return <Database size={16} color="var(--accent-purple)" />;
       case "SourceCode":
+      case "BackendImplementation":
         return <FileCode size={16} color="var(--accent-emerald)" />;
       case "SecurityReport":
         return <ShieldAlert size={16} color="var(--accent-crimson)" />;
@@ -41,7 +68,7 @@ export const ArtifactExplorer: React.FC<ArtifactExplorerProps> = ({ artifacts, o
   };
 
   return (
-    <div className="glass-panel" style={{ padding: 20, display: "flex", flexDirection: "column", height: 500 }}>
+    <div className="glass-panel" style={{ padding: 20, display: "flex", flexDirection: "column", minHeight: 520 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div>
           <h3 style={{ fontSize: 16, margin: 0 }}>Artifact Deliverable Explorer</h3>
@@ -50,17 +77,56 @@ export const ArtifactExplorer: React.FC<ArtifactExplorerProps> = ({ artifacts, o
           </p>
         </div>
 
-        {selectedArtifact && (selectedArtifact.status === "draft" || selectedArtifact.status === "rejected") && (
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <button
             className="btn btn-secondary"
-            onClick={() => onOpenGateDecision(selectedArtifact)}
-            style={{ fontSize: 12, padding: "6px 12px" }}
+            onClick={handleExport}
+            disabled={exporting}
+            style={{ fontSize: 12, padding: "6px 12px", display: "flex", alignItems: "center", gap: 6 }}
+            title="Export complete runnable project with Prisma, Fastify, Next.js, and Docs to disk"
           >
-            <Shield size={14} color="var(--accent-amber)" />
-            <span>Review Gate Action</span>
+            {exporting ? <Loader2 size={14} className="spin" /> : <FolderDown size={14} color="var(--accent-emerald)" />}
+            <span>{exporting ? "Exporting..." : "Export Codebase to Disk"}</span>
           </button>
-        )}
+
+          {selectedArtifact && (selectedArtifact.status === "draft" || selectedArtifact.status === "rejected") && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => onOpenGateDecision(selectedArtifact)}
+              style={{ fontSize: 12, padding: "6px 12px" }}
+            >
+              <Shield size={14} color="var(--accent-amber)" />
+              <span>Review Gate Action</span>
+            </button>
+          )}
+        </div>
       </div>
+
+      {exportMessage && (
+        <div
+          style={{
+            padding: "8px 14px",
+            marginBottom: 14,
+            borderRadius: "var(--radius-sm)",
+            background: exportMessage.includes("failed") ? "rgba(244, 63, 94, 0.15)" : "rgba(16, 185, 129, 0.15)",
+            border: exportMessage.includes("failed") ? "1px solid var(--accent-crimson)" : "1px solid var(--accent-emerald)",
+            color: exportMessage.includes("failed") ? "var(--accent-crimson)" : "var(--accent-emerald)",
+            fontSize: 12,
+            fontFamily: "var(--font-mono)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <span>{exportMessage}</span>
+          <button
+            onClick={() => setExportMessage(null)}
+            style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", padding: 0 }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 16, flex: 1, minHeight: 0 }}>
         {/* Artifacts List Sidebar */}

@@ -72,13 +72,27 @@ export async function buildServer(options: ServerOptions = {}): Promise<ForgeOSS
   // 6. AI Provider & Orchestrator
   let aiProvider = options.aiProvider;
   if (!aiProvider) {
-    if (process.env["OLLAMA_URL"]) {
-      aiProvider = new OllamaProvider({
-        baseUrl: process.env["OLLAMA_URL"],
-        model: process.env["OLLAMA_MODEL"] ?? "deepseek-coder:latest",
-      });
-    } else {
+    const forcedProvider = process.env["AI_PROVIDER"]?.toLowerCase();
+    if (forcedProvider === "mock") {
       aiProvider = new MockProvider();
+      app.log.info("AI Provider: MockProvider (forced via AI_PROVIDER=mock)");
+    } else {
+      const ollamaUrl = process.env["OLLAMA_URL"] ?? "http://localhost:11434";
+      const ollamaModel = process.env["OLLAMA_MODEL"] ?? "deepseek-coder:latest";
+      const candidateOllama = new OllamaProvider({
+        baseUrl: ollamaUrl,
+        model: ollamaModel,
+        timeoutMs: 120000,
+      });
+
+      const isHealthy = await candidateOllama.healthCheck();
+      if (isHealthy) {
+        aiProvider = candidateOllama;
+        app.log.info(`AI Provider: Ollama (${ollamaUrl} - ${ollamaModel})`);
+      } else {
+        aiProvider = new MockProvider();
+        app.log.warn(`Ollama unreachable at ${ollamaUrl}. Falling back to MockProvider.`);
+      }
     }
   }
 
