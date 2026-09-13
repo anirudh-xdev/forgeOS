@@ -2,9 +2,9 @@ import { OllamaProvider } from "../packages/ai-provider/dist/index.js";
 import { AgentRunner, runPMAgent } from "../packages/agent-runtime/dist/index.js";
 
 async function main() {
-  console.log("Initializing OllamaProvider with deepseek-coder:latest...");
+  console.log("Initializing OllamaProvider with qwen2.5-coder:14b...");
   const ollama = new OllamaProvider({
-    defaultModel: "deepseek-coder:latest",
+    defaultModel: "qwen2.5-coder:14b",
     timeoutMs: 180000,
   });
 

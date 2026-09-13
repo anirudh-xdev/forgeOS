@@ -1,0 +1,26 @@
+{
+  "name": "project-6e170406",
+  "version": "1.0.0",
+  "description": "Build a multi-tenant SaaS project management platform for small software teams.\n\nThe platform should allow organizations to create workspaces, invite team members, create projects, manage tasks, assign tasks to users, track task status and priority, and view project progress through a modern dashboard.\n\n### Technical requirements\n\n* Backend: Node.js + Fastify\n* Database: PostgreSQL\n* ORM: Prisma\n* Frontend: Next.js + TypeScript\n* Styling: Tailwind CSS\n* Animations: Framer Motion\n* API: REST\n* Validation: Zod\n* Authentication: secure session-based or JWT authentication\n* Realtime updates: WebSockets where useful\n* Local development: Docker Compose\n* Testing: Vitest + Playwright\n\n### Core features\n\n1. User registration and authentication\n2. Organization/workspace creation\n3. Team member invitations\n4. Role-based permissions\n5. Project creation and management\n6. Task CRUD\n7. Task assignment\n8. Task priority and status\n9. Project progress tracking\n10. Dashboard with project/task statistics\n11. Activity history\n12. Search and filtering\n13. Responsive UI\n14. Loading, empty, and error states\n15. Basic audit logging\n\n### Engineering requirements\n\nDesign the system with clear separation between:\n\n* Product requirements\n* Architecture\n* Database schema\n* API contracts\n* Backend implementation\n* Frontend implementation\n* Testing\n* Security review\n\nThe application should be developed incrementally rather than generated as one large implementation.\n\nProduce structured artifacts for each stage and validate each stage before moving to the next one.\n\nThe final application should be runnable locally with a single documented development workflow.\n",
+  "main": "dist/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "fastify": "^4.26.2",
+    "@fastify/cors": "^9.0.1",
+    "@prisma/client": "^5.10.2",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "prisma": "^5.10.2",
+    "typescript": "^5.4.2",
+    "tsx": "^4.7.1",
+    "vitest": "^1.3.1",
+    "@types/node": "^20.11.24"
+  }
+}
