@@ -11,7 +11,10 @@ export class CodebaseExporter {
   private baseExportDir: string;
 
   constructor(baseExportDir?: string) {
-    this.baseExportDir = baseExportDir ?? path.resolve(process.cwd(), "exports");
+    this.baseExportDir =
+      baseExportDir ??
+      process.env.FORGEOS_EXPORT_DIR ??
+      path.resolve(process.cwd(), "..", "forgeos-exports");
   }
 
   public async exportProject(project: { id: string; name: string; requirement: string }, artifacts: any[]): Promise<ExportResult> {

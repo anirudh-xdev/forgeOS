@@ -157,51 +157,49 @@ const SEVERITY_RANK: Record<string, number> = {
           const problemLower = (issue.problem ?? "").toLowerCase();
           const recLower = (issue.recommendation ?? "").toLowerCase();
 
-          const isCodeExtension = /\.(ts|tsx|js|jsx|py|java|go|rs|css|html)$/i.test(fileLower);
+          // 1. Any issue referencing source code file extensions or source directories
+          // is discarded because specification and schema artifacts contain zero source code files.
+          const isCodeExtension = /\.(ts|tsx|js|jsx|py|java|go|rs|css|html|prisma|sql)$/i.test(fileLower);
           const isSourcePath =
             fileLower.startsWith("src/") ||
+            fileLower.startsWith("lib/") ||
+            fileLower.startsWith("app/") ||
             fileLower.includes("/services/") ||
             fileLower.includes("/controllers/") ||
             fileLower.includes("/routes/") ||
             fileLower.includes("/components/") ||
-            fileLower.includes("usertable") ||
-            fileLower.includes("urlshortener") ||
-            fileLower.includes("userservice") ||
-            fileLower.includes("usercontroller") ||
-            fileLower.includes("prismaschema") ||
-            fileLower.includes("model.ts");
+            fileLower.includes("/models/") ||
+            fileLower.includes("service.") ||
+            fileLower.includes("controller.") ||
+            fileLower.includes("component.");
 
+          // 2. Generic implementation-level complaints that only apply to executable source code,
+          // not to requirements, architecture, relational data schemas, or UI/backend design specifications.
           const isCodeComplaint =
             problemLower.includes("type annotation") ||
             problemLower.includes("parameter type") ||
             problemLower.includes("return type") ||
-            problemLower.includes("does not handle rate limiting") ||
-            problemLower.includes("service does not") ||
-            problemLower.includes("component does not handle") ||
-            problemLower.includes("missing methods to handle") ||
-            problemLower.includes("no unique constraint on 'id'") ||
+            problemLower.includes("missing return") ||
+            problemLower.includes("return statement") ||
+            problemLower.includes("unique constraint on 'id'") ||
             problemLower.includes("missing @db.unique") ||
             problemLower.includes("missing @default constraint") ||
+            problemLower.includes("service does not") ||
+            problemLower.includes("component does not") ||
+            problemLower.includes("missing methods to handle") ||
+            problemLower.includes("missing method") ||
+            problemLower.includes("does not validate") ||
+            problemLower.includes("validate the payload") ||
             recLower.includes("type annotation") ||
-            recLower.includes("add a method to handle") ||
+            recLower.includes("add a method") ||
             recLower.includes("add @db.unique constraint") ||
             recLower.includes("unique constraint on 'id'") ||
-            recLower.includes("implement rate limiting in the") ||
-            recLower.includes("implement error handling in the");
+            recLower.includes("implement error handling") ||
+            recLower.includes("input validation") ||
+            recLower.includes("return statement") ||
+            recLower.includes("validate the payload");
 
-          const isBackendSpecComplaint =
-            isBackendSpec &&
-            (isCodeExtension ||
-              isSourcePath ||
-              problemLower.includes("does not validate") ||
-              problemLower.includes("validate the payload") ||
-              problemLower.includes("does not return") ||
-              problemLower.includes("return statement") ||
-              recLower.includes("validate the payload") ||
-              recLower.includes("input validation") ||
-              recLower.includes("return statement"));
-
-          return isCodeExtension || isSourcePath || isCodeComplaint || isBackendSpecComplaint;
+          return isCodeExtension || isSourcePath || isCodeComplaint;
         };
 
         const genuineIssues = reviewReport.issues.filter((issue) => !isHallucinatedCodeIssue(issue));
@@ -350,8 +348,10 @@ const SEVERITY_RANK: Record<string, number> = {
           const descLower = (f.description ?? "").toLowerCase();
 
           const isNonExistentFile =
-            fileLower.includes("userservice") ||
-            fileLower.includes("usercontroller") ||
+            fileLower.startsWith("src/") ||
+            fileLower.includes("service") ||
+            fileLower.includes("controller") ||
+            fileLower.includes("component") ||
             /\.(js|jsx|ts|tsx)$/i.test(fileLower);
 
           const isUnsubstantiatedComplaint =

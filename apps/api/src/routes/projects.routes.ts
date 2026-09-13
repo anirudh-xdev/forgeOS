@@ -447,8 +447,9 @@ export const projectsRoutes: FastifyPluginAsync<ProjectsRoutesOptions> = async (
   });
 
   // 11. POST /api/projects/:id/export - Export deliverables to real codebase directory on disk
-  fastify.post<{ Params: { id: string } }>("/projects/:id/export", async (request, reply) => {
+  fastify.post<{ Params: { id: string }; Body?: { exportDir?: string } }>("/projects/:id/export", async (request, reply) => {
     const { id } = request.params;
+    const customExportDir = (request.body as { exportDir?: string } | undefined)?.exportDir;
     const project = await projectRepo.getProject(id);
     if (!project) {
       return reply.status(404).send({ error: `Project '${id}' not found.` });
@@ -459,7 +460,7 @@ export const projectsRoutes: FastifyPluginAsync<ProjectsRoutesOptions> = async (
       return reply.status(400).send({ error: "No artifacts available to export yet. Run workflow to completion first." });
     }
 
-    const exporter = new CodebaseExporter();
+    const exporter = new CodebaseExporter(customExportDir);
     const result = await exporter.exportProject(
       {
         id: project.id,
