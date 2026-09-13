@@ -144,6 +144,13 @@ export class ProjectRepository {
     });
   }
 
+  public async updateProjectStatus(projectId: string, status: string) {
+    return this.prisma.project.update({
+      where: { id: projectId },
+      data: { status, updatedAt: new Date() },
+    });
+  }
+
   public async listProjects() {
     return this.prisma.project.findMany({
       orderBy: { createdAt: "desc" },

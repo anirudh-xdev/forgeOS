@@ -106,21 +106,44 @@ export class DynamicAgentRouter {
       effectiveStrategy = "COST_OPTIMIZED";
     }
 
-    // 2. Infer required capabilities from task input
+    // 2. Infer required capabilities from task input (strip recovery feedback to avoid false reviewer matches)
     const inputObj =
       typeof task.input === "object" && task.input !== null
         ? (task.input as Record<string, unknown>)
         : {};
-    const taskText =
-      (inputObj["directive"] as string) ||
-      (inputObj["requirement"] as string) ||
-      (typeof task.input === "string" ? task.input : JSON.stringify(task.input ?? {}));
+
+    let taskText = "";
+    if (typeof inputObj["requirement"] === "string" && inputObj["requirement"].trim()) {
+      taskText = inputObj["requirement"];
+    } else if (typeof inputObj["directive"] === "string") {
+      taskText = inputObj["directive"]
+        .replace(/ATTENTION:[\s\S]*?(contracts\.|remediation advice|\n\n)/gi, "")
+        .replace(/\[RECOVERY FEEDBACK[\s\S]*?\]/gi, "")
+        .trim();
+    }
+    if (!taskText) {
+      taskText = typeof task.input === "string" ? task.input : JSON.stringify(task.input ?? {});
+    }
 
     const requiredCapabilities = this.capabilityMatcher.inferCapabilitiesFromText(taskText);
 
-    // 3. Score all candidates
+    // 3. Candidate pool & scoring
+    let candidates = Array.from(this.agentStats.values());
+
+    // If task has a specific target agentId, ensure we do not jump to an incompatible role
+    if (task.agentId) {
+      const targetCandidate = candidates.find((c) => c.agentId === task.agentId);
+      if (targetCandidate) {
+        const domainMatches = candidates.filter(
+          (c) => c.role === targetCandidate.role || c.agentId === task.agentId
+        );
+        if (domainMatches.length > 0) {
+          candidates = domainMatches;
+        }
+      }
+    }
+
     const scoredCandidates: AgentScoreRecord[] = [];
-    const candidates = Array.from(this.agentStats.values());
 
     for (const candidate of candidates) {
       // If task specifically targeted an agent, boost capability
@@ -132,7 +155,7 @@ export class DynamicAgentRouter {
       );
 
       if (isTargeted) {
-        scoreRecord.compositeScore = Math.min(100, Number((scoreRecord.compositeScore * 1.15).toFixed(2)));
+        scoreRecord.compositeScore = Math.min(100, Number((scoreRecord.compositeScore * 1.25 + 10).toFixed(2)));
       }
 
       scoredCandidates.push(scoreRecord);

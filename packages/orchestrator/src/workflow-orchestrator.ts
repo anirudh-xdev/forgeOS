@@ -87,6 +87,25 @@ export class WorkflowOrchestrator {
     return this.recoveryStrategy;
   }
 
+  private async terminateProjectAsFailed(
+    projectId: string,
+    graph: TaskGraph,
+    failedTaskId: string
+  ): Promise<void> {
+    if (this.repositories) {
+      await this.repositories.projectRepo.updateProjectStatus(projectId, "FAILED");
+      for (const t of graph.getAllTasks()) {
+        if (
+          t.id !== failedTaskId &&
+          (t.status === "RUNNING" || t.status === "RETRYING" || t.status === "PENDING")
+        ) {
+          graph.updateTaskStatus(t.id, "CANCELLED");
+          await this.repositories.projectRepo.updateTaskStatus(t.id, "CANCELLED");
+        }
+      }
+    }
+  }
+
   private resolveAgentDefinition(agentId: string) {
     if (agentId === PMAgentDefinition.id) {
       return {
@@ -734,6 +753,8 @@ export class WorkflowOrchestrator {
                   task.id
                 );
 
+                await this.terminateProjectAsFailed(projectId, graph, task.id);
+
                 return {
                   projectId,
                   status: "FAILED",
@@ -810,6 +831,8 @@ export class WorkflowOrchestrator {
               task.id
             );
 
+            await this.terminateProjectAsFailed(projectId, graph, task.id);
+
             return {
               projectId,
               status: "FAILED",
@@ -871,6 +894,8 @@ export class WorkflowOrchestrator {
                 { failedTaskId: task.id, error: plan.loopCheck.message, loopDetected: true },
                 task.id
               );
+
+              await this.terminateProjectAsFailed(projectId, graph, task.id);
 
               return {
                 projectId,
@@ -946,6 +971,8 @@ export class WorkflowOrchestrator {
             { failedTaskId: task.id, error: result.error },
             task.id
           );
+
+          await this.terminateProjectAsFailed(projectId, graph, task.id);
 
           return {
             projectId,

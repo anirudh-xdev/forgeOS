@@ -202,6 +202,9 @@ export const projectsRoutes: FastifyPluginAsync<ProjectsRoutesOptions> = async (
 
       const newStatus = action === "approve" ? "approved" : "rejected";
       await artifactRepo.updateArtifactStatus(artifactId, newStatus);
+      if (action === "approve" && artifact.taskId) {
+        await projectRepo.updateTaskStatus(artifact.taskId, "COMPLETED");
+      }
 
       const eventType: DomainEventType = action === "approve" ? "SPEC_APPROVED" : "REVIEW_FAILED";
 
